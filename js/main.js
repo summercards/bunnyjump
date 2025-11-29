@@ -272,6 +272,7 @@ class Main {
 
     this.bells = [];
     this.particles = [];
+    this.scorePopups = [];      // 铃铛爆开时的分数字特效
     this.backgroundStars = [];
     this.snowflakes = [];
     this.trees = [];
@@ -376,6 +377,7 @@ class Main {
     // 集合
     this.bells = [];
     this.particles = [];
+    this.scorePopups = [];      // 清空分数字特效
     this.backgroundStars = [];
     this.snowflakes = [];
     this.trees = [];
@@ -586,6 +588,10 @@ class Main {
       this.bells.forEach(b => { b.y += diff; });
       // 所有粒子下移
       this.particles.forEach(p => { p.y += diff; });
+      // 分数弹出文字也要跟着世界一起下移
+      if (this.scorePopups) {
+        this.scorePopups.forEach(s => { s.y += diff; });
+      }
       // 地板和树下移
       this.groundY += diff;
       this.trees.forEach(t => { t.y += diff; });
@@ -626,7 +632,20 @@ class Main {
           let particleColor = CONSTANTS.COLORS.bellNormal;
           if (bell.type === 'BOOST') particleColor = CONSTANTS.COLORS.bellBoost;
 
+          // 铃铛散开粒子特效
           this.spawnParticles(bell.x, bell.y, particleColor);
+
+          // 分数弹出特效：在铃铛中心显示当前分数
+          if (!this.scorePopups) this.scorePopups = [];
+          this.scorePopups.push({
+            x: bell.x,
+            y: bell.y,
+            text: this.score.toString(),  // 当前分数
+            life: 1.0,
+            age: 0,
+            vy: -1.2                      // 向上飘一点
+          });
+
         }
       });
     }
@@ -636,20 +655,34 @@ class Main {
 
     // 粒子更新
     this.particles.forEach(p => {
-      p.age++;
-
-      if (p.age <= 12) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.75;
-        p.vy *= 0.75;
+        p.age++;
+  
+        if (p.age <= 12) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.75;
+          p.vy *= 0.75;
+        }
+        if (p.age > 20) {
+          p.life -= 0.1;
+        }
+      });
+      this.particles = this.particles.filter(p => p.life > 0);
+  
+      // 分数弹出文字更新
+      if (this.scorePopups) {
+        this.scorePopups.forEach(s => {
+          s.age++;
+          s.y += s.vy;   // 慢慢往上
+          // 稍微减速
+          s.vy *= 0.9;
+          // 缓慢淡出
+          s.life -= 0.03;
+        });
+        this.scorePopups = this.scorePopups.filter(s => s.life > 0);
       }
-      if (p.age > 20) {
-        p.life -= 0.1;
-      }
-    });
-    this.particles = this.particles.filter(p => p.life > 0);
-  }
+    }
+  
 
   updateSnowflakes () {
     this.snowflakes.forEach(s => {
@@ -748,16 +781,32 @@ class Main {
 
     // 4. 粒子
     this.particles.forEach(p => {
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-
-    // 5. 兔子
-    this.drawRabbit(this.rabbit.x, this.rabbit.y, this.rabbit.vy, this.rabbit.rotation);
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+  
+      // 4.5 分数弹出文字（显示当前得分）
+      if (this.scorePopups && this.scorePopups.length > 0) {
+        ctx.save();
+        ctx.font = 'bold 26px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        this.scorePopups.forEach(s => {
+          ctx.globalAlpha = Math.max(0, s.life);
+          ctx.fillStyle = '#facc15'; // 和蝴蝶结同色，比较亮
+          ctx.fillText(s.text, s.x, s.y);
+        });
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+  
+      // 5. 兔子
+      this.drawRabbit(this.rabbit.x, this.rabbit.y, this.rabbit.vy, this.rabbit.rotation);
+  
 
     // 6. 雪花 (前景)
     ctx.fillStyle = '#ffffff';
