@@ -1,0 +1,55 @@
+{
+    "description": "Christmas Bell Hop",
+    "setting": {
+      "urlCheck": true,
+      "es6": true,
+      "enhance": true,
+      "postcss": true,
+      "preloadBackgroundData": false,
+      "minified": true,
+      "newFeature": true,
+      "coverView": true,
+      "nodeModules": false,
+      "autoAudits": false,
+      "showShadowRootInWxmlPanel": true,
+      "scopeDataCheck": false,
+      "uglifyFileName": false,
+      "checkInvalidSitemap": true,
+      "checkSiteMap": true,
+      "uploadWithSourceMap": true,
+      "compileHotReLoad": false,
+      "useMultiFrameRuntime": true,
+      "useApiHook": true,
+      "useApiHostProcess": true,
+      "babelSetting": {
+        "ignore": [],
+        "disablePlugins": [],
+        "outputPath": ""
+      },
+      "enableEngineNative": false,
+      "bundle": false,
+      "useIsolateContext": true,
+      "useCompilerModule": true,
+      "userConfirmedUseCompilerModuleSwitch": false,
+      "userConfirmedBundleSwitch": false,
+      "packNpmManually": false,
+      "packNpmRelationList": [],
+      "minifyWXSS": true
+    },
+    "compileType": "game",
+    "libVersion": "2.19.2",
+    "appid": "touristappid",
+    "projectname": "RabbitGame",
+    "debugOptions": {
+      "hidedInDevtools": []
+    },
+    "isGameTourist": true,
+    "simulatorType": "wechat",
+    "simulatorPluginLibVersion": {},
+    "condition": {
+      "game": {
+        "current": -1,
+        "list": []
+      }
+    }
+  }
