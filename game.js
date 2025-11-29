@@ -1,3 +1,4 @@
+const isWeChat = typeof wx !== 'undefined';
 
 import Main from './js/main.js'
 
