@@ -76,7 +76,7 @@ class AudioController {
     this.bgm = null;   // 背景音乐
 
     // Web Audio：小游戏 & H5 通用
-    if (isWeChat && typeof wx.createWebAudioContext === 'function') {
+    if (isWeChat && typeof wx !== 'undefined' && typeof wx.createWebAudioContext === 'function') {
       try {
         this.ctx = wx.createWebAudioContext();
       } catch (e) {
@@ -101,7 +101,7 @@ class AudioController {
   initBGM() {
     // 如果你有 audio/bgm.mp3 就能听到 BGM；没有也不会报错
     try {
-      if (isWeChat && typeof wx.createInnerAudioContext === 'function') {
+      if (isWeChat && typeof wx !== 'undefined' && typeof wx.createInnerAudioContext === 'function') {
         this.bgm = wx.createInnerAudioContext();
         this.bgm.src = 'audio/bgm.mp3';
         this.bgm.loop = true;
@@ -165,7 +165,7 @@ class AudioController {
       osc.frequency.setValueAtTime(1100, t);
       osc.frequency.linearRampToValueAtTime(1105, t + 0.1); // 颤音
 
-      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.setValueAtTime(0.1, t);
       gain.gain.exponentialRampToValueAtTime(0.01, t + 1.5);
       duration = 1.5;
     } else if (type === 'DOUBLE') {
@@ -174,7 +174,7 @@ class AudioController {
       osc.frequency.setValueAtTime(1200, t);
       osc.frequency.linearRampToValueAtTime(2000, t + 0.2);
 
-      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.setValueAtTime(0.1, t);
       gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
       duration = 0.5;
     } else {
@@ -213,7 +213,7 @@ class AudioController {
     osc.frequency.setValueAtTime(200, t);
     osc.frequency.linearRampToValueAtTime(50, t + 0.8);
 
-    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.setValueAtTime(0.1, t);
     gain.gain.linearRampToValueAtTime(0.01, t + 0.8);
 
     try {
@@ -249,6 +249,10 @@ class Main {
   constructor () {
     this.audio = new AudioController();
 
+    // 标题图片（MENU / GAMEOVER 用）
+    this.titleImage = null;
+    this.titleImageLoaded = false;
+
     // 状态 & 难度
     this.state = 'MENU';                     // MENU, PLAYING, GAMEOVER
     this.difficulty = 0;                     // 0 ~ 1.5 左右
@@ -281,6 +285,9 @@ class Main {
 
     // 初始化游戏世界（只重置数据，不修改 state）
     this.reset();
+
+    // 预加载标题图片
+    this.loadTitleImage();
 
     // 绑定输入：微信小游戏 + 浏览器 H5
     if (isWeChat && typeof wx !== 'undefined') {
@@ -338,6 +345,40 @@ class Main {
     // 开始循环
     this.loop = this.loop.bind(this);
     this.aniId = raf(this.loop);
+  }
+
+  // 载入标题图片（兼容微信小游戏 + H5）
+  loadTitleImage () {
+    const self = this;
+    // 这里就是你要放的图片路径：images/title.png
+    const src = 'images/title.png';
+
+    // 微信小游戏环境
+    if (isWeChat && typeof wx !== 'undefined' && typeof wx.createImage === 'function') {
+      const img = wx.createImage();
+      img.onload = function () {
+        self.titleImage = img;
+        self.titleImageLoaded = true;
+      };
+      img.onerror = function (err) {
+        console.warn('标题图片加载失败（微信）', err);
+      };
+      img.src = src;
+    }
+    // H5 浏览器环境
+    else if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.onload = function () {
+        self.titleImage = img;
+        self.titleImageLoaded = true;
+      };
+      img.onerror = function (err) {
+        console.warn('标题图片加载失败（H5）', err);
+      };
+      img.src = src;
+    } else {
+      console.warn('当前环境不支持 Image / wx.createImage，标题图片无法加载');
+    }
   }
 
   // 只负责重置数据，不修改 this.state
@@ -867,8 +908,9 @@ class Main {
     }
   }
 
+  // 使用图片作为标题 UI 的覆盖层
   drawUIOverlay (title, subtitle, detail) {
-    // 整体遮罩
+    // 半透明遮罩
     ctx.fillStyle = 'rgba(11, 16, 38, 0.70)';
     ctx.fillRect(0, 0, screenWidth, screenHeight);
 
@@ -878,44 +920,79 @@ class Main {
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
 
-    // 卡片背景
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    // 如果标题图片加载好了，就用标题图片做主视觉
+    if (this.titleImage && this.titleImageLoaded) {
+      const img = this.titleImage;
 
-    const cardW = 320;
-    const cardH = 340;
-    const cardX = centerX - cardW / 2;
-    const cardY = centerY - cardH / 2;
+      // 控制一下最大宽度，不要超过屏幕
+      const maxWidth = Math.min(screenWidth * 0.8, img.width);
+      const scale = maxWidth / img.width;
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
 
-    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
-    ctx.fill();
-    ctx.restore();
+      const drawX = centerX - drawW / 2;
+      const drawY = centerY - drawH / 2 - 40; // 稍微往上挪一点
 
-    // 顶部小兔子图标
-    const bounceY = Math.sin(Date.now() * 0.005) * 5;
-    this.drawRabbitIcon(centerX, cardY + 60 + bounceY);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 25;
+      ctx.shadowOffsetY = 12;
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      ctx.restore();
 
-    // Title
-    ctx.font = 'bold 42px sans-serif';
-    ctx.fillStyle = '#1e293b';
-    ctx.fillText(title, centerX, cardY + 140);
+      // 图片下面再加两行文字（开始提示 / 分数）
+      const subtitleY = drawY + drawH + 40;
+      const detailY = subtitleY + 40;
 
-    // Subtitle
-    const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
-    ctx.fillText(subtitle, centerX, cardY + 200);
+      const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
 
-    // Detail
-    ctx.fillStyle = '#64748b';
-    ctx.font = '20px sans-serif';
-    ctx.fillText(detail, centerX, cardY + 250);
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
+      ctx.fillText(subtitle, centerX, subtitleY);
+
+      ctx.fillStyle = '#e5e7eb';
+      ctx.font = '20px sans-serif';
+      ctx.fillText(detail, centerX, detailY);
+    } else {
+      // 标题图还没加载好 / 加载失败时，退回到原来的白卡 UI（避免黑屏）
+      const cardW = 320;
+      const cardH = 340;
+      const cardX = centerX - cardW / 2;
+      const cardY = centerY - cardH / 2;
+
+      // 卡片背景
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.2)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetY = 10;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
+      ctx.fill();
+      ctx.restore();
+
+      // 原来的小兔图标
+      const bounceY = Math.sin(Date.now() * 0.005) * 5;
+      this.drawRabbitIcon(centerX, cardY + 60 + bounceY);
+
+      // 标题
+      ctx.font = 'bold 42px sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText(title, centerX, cardY + 140);
+
+      // 副标题
+      const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
+      ctx.fillText(subtitle, centerX, cardY + 200);
+
+      // 说明（分数）
+      ctx.fillStyle = '#64748b';
+      ctx.font = '20px sans-serif';
+      ctx.fillText(detail, centerX, cardY + 250);
+    }
   }
 
-  // 简化的兔子图标用于UI
+  // 简化的兔子图标用于UI（现在作为标题图的备份）
   drawRabbitIcon (x, y) {
     ctx.save();
     ctx.translate(x, y);
