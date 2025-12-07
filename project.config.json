@@ -1,55 +1,55 @@
 {
     "description": "Christmas Bell Hop",
     "setting": {
-      "urlCheck": true,
-      "es6": true,
-      "enhance": true,
-      "postcss": true,
-      "preloadBackgroundData": false,
-      "minified": true,
-      "newFeature": true,
-      "coverView": true,
-      "nodeModules": false,
-      "autoAudits": false,
-      "showShadowRootInWxmlPanel": true,
-      "scopeDataCheck": false,
-      "uglifyFileName": false,
-      "checkInvalidSitemap": true,
-      "checkSiteMap": true,
-      "uploadWithSourceMap": true,
-      "compileHotReLoad": false,
-      "useMultiFrameRuntime": true,
-      "useApiHook": true,
-      "useApiHostProcess": true,
-      "babelSetting": {
-        "ignore": [],
-        "disablePlugins": [],
-        "outputPath": ""
-      },
-      "enableEngineNative": false,
-      "bundle": false,
-      "useIsolateContext": true,
-      "useCompilerModule": true,
-      "userConfirmedUseCompilerModuleSwitch": false,
-      "userConfirmedBundleSwitch": false,
-      "packNpmManually": false,
-      "packNpmRelationList": [],
-      "minifyWXSS": true
+        "urlCheck": true,
+        "es6": true,
+        "enhance": false,
+        "postcss": true,
+        "preloadBackgroundData": false,
+        "minified": true,
+        "newFeature": true,
+        "coverView": true,
+        "nodeModules": false,
+        "autoAudits": false,
+        "showShadowRootInWxmlPanel": true,
+        "scopeDataCheck": false,
+        "uglifyFileName": false,
+        "checkInvalidSitemap": true,
+        "checkSiteMap": true,
+        "uploadWithSourceMap": true,
+        "compileHotReLoad": false,
+        "useMultiFrameRuntime": true,
+        "useApiHook": true,
+        "useApiHostProcess": true,
+        "babelSetting": {
+            "ignore": [],
+            "disablePlugins": [],
+            "outputPath": ""
+        },
+        "enableEngineNative": false,
+        "bundle": false,
+        "useIsolateContext": true,
+        "useCompilerModule": false,
+        "userConfirmedUseCompilerModuleSwitch": false,
+        "userConfirmedBundleSwitch": false,
+        "packNpmManually": false,
+        "packNpmRelationList": [],
+        "minifyWXSS": true
     },
     "compileType": "game",
     "libVersion": "2.19.2",
-    "appid": "touristappid",
+    "appid": "wxd1ad11a602a4f88d",
     "projectname": "RabbitGame",
     "debugOptions": {
-      "hidedInDevtools": []
+        "hidedInDevtools": []
     },
-    "isGameTourist": true,
+    "isGameTourist": false,
     "simulatorType": "wechat",
     "simulatorPluginLibVersion": {},
     "condition": {
-      "game": {
-        "current": -1,
-        "list": []
-      }
+        "game": {
+            "current": -1,
+            "list": []
+        }
     }
-  }
+}

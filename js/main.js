@@ -425,18 +425,49 @@ class Main {
     }
   }
 
-  // 根据当前难度生成铃铛（越高越难）
+  // 根据当前分数生成铃铛（越高越难，尺寸分 9 挡）
   spawnBell (y) {
     const difficulty = this.difficulty || 0;
 
-    // 铃铛尺寸随难度略微变小
-    const size = 30 - difficulty * 6;  // 最小大概 21
+    // --- 尺寸挡位定义 ---
+    // level 0: score < 3000      -> 30
+    // level 1: score ≥ 3000      -> 28
+    // level 2: score ≥ 5000      -> 26
+    // level 3: score ≥ 7000      -> 25
+    // level 4: score ≥ 9000      -> 24
+    // level 5: score ≥ 11000     -> 23
+    // level 6: score ≥ 12000     -> 22  (原来的“最小”)
+    // level 7: score ≥ 14000     -> 21  (新增档位 1)
+    // level 8: score ≥ 16000     -> 20  (新增档位 2，最终最小)
+    const SCORE_LEVEL_THRESHOLDS = [0, 3000, 5000, 7000, 9000, 11000, 12000, 14000, 16000];
+    const SIZE_LEVEL_VALUES      = [30, 28, 26, 25, 24, 23, 22, 21, 20];
+
+    // 当前分数对应哪一档
+    let level = 0;
+    for (let i = 1; i < SCORE_LEVEL_THRESHOLDS.length; i++) {
+      if (this.score >= SCORE_LEVEL_THRESHOLDS[i]) {
+        level = i;
+      } else {
+        break;
+      }
+    }
+
+    // 防止越界
+    if (level < 0) level = 0;
+    if (level >= SIZE_LEVEL_VALUES.length) {
+      level = SIZE_LEVEL_VALUES.length - 1;
+    }
+
+    const size = SIZE_LEVEL_VALUES[level];
+
+    // 左右摆动速度仍然用 difficulty 来控制（和高度相关）
     const oscBase = 0.02 + Math.random() * 0.03;
-    // 难度越高，左右摆动越快
     const oscSpeed = oscBase * (1 + difficulty * 0.5);
 
-    // 去掉随机皮肤，只保留 Boost 区别
     const isBoost = Math.random() > 0.9;
+
+    // 判定半径跟随尺寸变化
+    const hitRadius = size * 0.75; // 可以按手感 0.7~0.8 微调
 
     this.bells.push({
       x: Math.random() * (screenWidth - 80) + 40,
@@ -444,6 +475,7 @@ class Main {
       type: isBoost ? 'BOOST' : 'NORMAL',
       width: size,
       height: size,
+      hitRadius,
       active: true,
       oscillation: Math.random() * Math.PI,
       oscSpeed
@@ -531,7 +563,7 @@ class Main {
 
     if (this.state !== 'PLAYING') return;
 
-    // 难度随高度提升而增加
+    // 难度随高度提升而增加（仍然用于重力、间距、摆动等）
     this.difficulty = Math.min(1.5, this.cameraY / (screenHeight * 4));
     const difficulty = this.difficulty;
 
@@ -617,7 +649,8 @@ class Main {
         const dy = rabbitFootY - bellCy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const hitRadius = 26 - difficulty * 4; // 大约 26 ~ 20
+        // 判定半径优先使用每个铃铛自己的 hitRadius
+        const hitRadius = bell.hitRadius || (26 - difficulty * 4); // 兼容旧逻辑
         if (dist < hitRadius) {
           bell.active = false;
 
@@ -655,34 +688,33 @@ class Main {
 
     // 粒子更新
     this.particles.forEach(p => {
-        p.age++;
-  
-        if (p.age <= 12) {
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vx *= 0.75;
-          p.vy *= 0.75;
-        }
-        if (p.age > 20) {
-          p.life -= 0.1;
-        }
-      });
-      this.particles = this.particles.filter(p => p.life > 0);
-  
-      // 分数弹出文字更新
-      if (this.scorePopups) {
-        this.scorePopups.forEach(s => {
-          s.age++;
-          s.y += s.vy;   // 慢慢往上
-          // 稍微减速
-          s.vy *= 0.9;
-          // 缓慢淡出
-          s.life -= 0.03;
-        });
-        this.scorePopups = this.scorePopups.filter(s => s.life > 0);
+      p.age++;
+
+      if (p.age <= 12) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.75;
+        p.vy *= 0.75;
       }
+      if (p.age > 20) {
+        p.life -= 0.1;
+      }
+    });
+    this.particles = this.particles.filter(p => p.life > 0);
+
+    // 分数弹出文字更新
+    if (this.scorePopups) {
+      this.scorePopups.forEach(s => {
+        s.age++;
+        s.y += s.vy;   // 慢慢往上
+        // 稍微减速
+        s.vy *= 0.9;
+        // 缓慢淡出
+        s.life -= 0.03;
+      });
+      this.scorePopups = this.scorePopups.filter(s => s.life > 0);
     }
-  
+  }
 
   updateSnowflakes () {
     this.snowflakes.forEach(s => {
@@ -773,40 +805,39 @@ class Main {
       ctx.fill();
     }
 
-    // 3. 铃铛
+    // 3. 铃铛（按尺寸缩放）
     this.bells.forEach(bell => {
       if (!bell.active) return;
-      this.drawBell(bell.x, bell.y, bell.type, bell.oscillation, bell.oscSpeed);
+      this.drawBell(bell);
     });
 
     // 4. 粒子
     this.particles.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // 4.5 分数弹出文字（显示当前得分）
+    if (this.scorePopups && this.scorePopups.length > 0) {
+      ctx.save();
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      this.scorePopups.forEach(s => {
+        ctx.globalAlpha = Math.max(0, s.life);
+        ctx.fillStyle = '#facc15'; // 和蝴蝶结同色，比较亮
+        ctx.fillText(s.text, s.x, s.y);
       });
+      ctx.restore();
       ctx.globalAlpha = 1;
-  
-      // 4.5 分数弹出文字（显示当前得分）
-      if (this.scorePopups && this.scorePopups.length > 0) {
-        ctx.save();
-        ctx.font = 'bold 26px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        this.scorePopups.forEach(s => {
-          ctx.globalAlpha = Math.max(0, s.life);
-          ctx.fillStyle = '#facc15'; // 和蝴蝶结同色，比较亮
-          ctx.fillText(s.text, s.x, s.y);
-        });
-        ctx.restore();
-        ctx.globalAlpha = 1;
-      }
-  
-      // 5. 兔子
-      this.drawRabbit(this.rabbit.x, this.rabbit.y, this.rabbit.vy, this.rabbit.rotation);
-  
+    }
+
+    // 5. 兔子
+    this.drawRabbit(this.rabbit.x, this.rabbit.y, this.rabbit.vy, this.rabbit.rotation);
 
     // 6. 雪花 (前景)
     ctx.fillStyle = '#ffffff';
@@ -1003,12 +1034,21 @@ class Main {
     }
   }
 
-  drawBell (x, y, type, osc, _speed) {
+  // 铃铛绘制：根据 bell.width 做缩放
+  drawBell (bell) {
+    const { x, y, type, oscillation, width } = bell;
+
     ctx.save();
     ctx.translate(x, y);
 
-    const swing = Math.sin(Date.now() * 0.003 + osc) * 0.15;
+    const swing = Math.sin(Date.now() * 0.003 + oscillation) * 0.15;
     ctx.rotate(swing);
+
+    // 以 width 为基准做整体缩放（30 视为基础尺寸）
+    const BASE_SIZE = 30;
+    const size = width || BASE_SIZE;
+    const scale = size / BASE_SIZE;
+    ctx.scale(scale, scale);
 
     ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
     ctx.shadowBlur = 5;
