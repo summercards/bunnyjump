@@ -936,31 +936,66 @@ class Main {
   
   checkStarEarn() {
     if (!this.canGetStar) return;
-    
+
     // 获取条件：首次 >5000分 或 打破记录
-    const canEarn = (this.stars === 0 && this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE) || (this.score > this.highScore);
-    
+    const isNewRecord = this.score > this.highScore;
+    const isFirstMilestone = this.stars === 0 && this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE;
+    const canEarn = isNewRecord || isFirstMilestone;
+
     if (canEarn) {
       if (this.stars < CONSTANTS.SOCIAL.MAX_STARS) {
         this.stars = CONSTANTS.SOCIAL.MAX_STARS;
         this.canGetStar = false;
         this.saveSocialData();
-        
-        if (this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE) {
+
+        // 显示获得星星的提示
+        if (isNewRecord && isFirstMilestone) {
+          // 同时打破纪录和首次达到5000分
           this.activeEffects.push({
-            text: '⭐ 获得星星！',
+            text: '🏆 新纪录：' + this.score + '！',
+            color: '#fbbf24',
+            life: 2.5,
+            age: 0,
+            y: screenHeight * 0.35
+          });
+          this.activeEffects.push({
+            text: '⭐ 恭喜获得星星！',
+            color: '#fbbf24',
+            life: 2.5,
+            age: 0,
+            y: screenHeight * 0.45
+          });
+        } else if (isFirstMilestone) {
+          // 首次达到5000分
+          this.activeEffects.push({
+            text: '🎯 达成目标：' + this.score + '分！',
+            color: '#fbbf24',
+            life: 2.5,
+            age: 0,
+            y: screenHeight * 0.35
+          });
+          this.activeEffects.push({
+            text: '⭐ 恭喜获得星星！',
+            color: '#fbbf24',
+            life: 2.5,
+            age: 0,
+            y: screenHeight * 0.45
+          });
+        } else if (isNewRecord) {
+          // 破纪录
+          this.activeEffects.push({
+            text: '🏆 新纪录：' + this.score + '！',
             color: '#fbbf24',
             life: 2.0,
             age: 0,
             y: screenHeight * 0.4
           });
-        } else {
           this.activeEffects.push({
-            text: '⭐ 新纪录！',
+            text: '⭐ 再次获得星星！',
             color: '#fbbf24',
             life: 2.0,
             age: 0,
-            y: screenHeight * 0.4
+            y: screenHeight * 0.5
           });
         }
       }
@@ -1453,6 +1488,17 @@ class Main {
     ctx.font = 'bold 40px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
+
+    // 显示最高纪录（在分数上方）
+    if (this.highScore > 0) {
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.fillText('最高: ' + this.highScore, 20, 25);
+    }
+
+    // 显示当前分数
+    ctx.font = 'bold 40px sans-serif';
+    ctx.fillStyle = '#fff';
     ctx.fillText(this.score.toString(), 20, 50);
 
     if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.combo > 0) {
