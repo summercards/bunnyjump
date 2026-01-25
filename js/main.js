@@ -885,12 +885,50 @@ class Main {
         }
       });
 
-      // 飞鸟碰撞检测
+      // 飞鸟碰撞检测（只能从上方踩踏消灭飞鸟）
       this.birds.forEach(bird => {
         if (!bird.active) return;
-        const dx = this.rabbit.x - bird.x;
-        const dy = (this.rabbit.y - 10) - bird.y;
-        if (this.respawnGraceTimer <= 0 && Math.abs(dx) < 25 && Math.abs(dy) < 20) {
+
+        // 定义碰撞盒（使用比实际尺寸稍小的碰撞盒，更精确）
+        const rabbitBox = {
+          left: this.rabbit.x - this.rabbit.width * 0.4,  // 缩小碰撞盒
+          right: this.rabbit.x + this.rabbit.width * 0.4,
+          top: this.rabbit.y - this.rabbit.height * 0.4,
+          bottom: this.rabbit.y + this.rabbit.height * 0.4
+        };
+
+        // 飞鸟的碰撞盒（椭圆20×12，使用稍微宽松一点的判定）
+        const birdBox = {
+          left: bird.x - 16,  // 比绘制椭圆小一点
+          right: bird.x + 16,
+          top: bird.y - 8,   // 比绘制椭圆小一点
+          bottom: bird.y + 8
+        };
+
+        // 检测碰撞盒重叠
+        const isOverlapping = rabbitBox.left < birdBox.right &&
+                              rabbitBox.right > birdBox.left &&
+                              rabbitBox.top < birdBox.bottom &&
+                              rabbitBox.bottom > birdBox.top;
+
+        if (!isOverlapping) return;  // 没有重叠，跳过
+
+        // 检测是否是踩踏：兔子正在下落，且兔子底部在飞鸟顶部上方附近
+        const isFallingDown = this.rabbit.vy > 0;
+        const rabbitBottomAboveBirdTop = rabbitBox.bottom < birdBox.top + 10;  // 兔子底部在飞鸟顶部10px以内
+        const rabbitWasAbove = this.rabbit.y - this.rabbit.vy * 3 < birdBox.top - 10;  // 上一帧兔子在飞鸟上方
+
+        const isStomping = isFallingDown && rabbitBottomAboveBirdTop && rabbitWasAbove;
+
+        if (isStomping) {
+          // 踩踏消灭飞鸟
+          bird.active = false;
+          this.rabbit.vy = CONSTANTS.JUMP_FORCE * 0.6;  // 给一个小反弹
+          this.score += 50;  // 踩踏奖励分
+          this.spawnParticles(bird.x, bird.y, '#374151');
+          this.spawnEffectPopup('+50!', '#374151');
+        } else if (this.respawnGraceTimer <= 0) {
+          // 撞到飞鸟，游戏结束
           this.gameOver();
         }
       });
@@ -1181,7 +1219,7 @@ class Main {
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
 
-    // 绘制卡片背景
+    // 绘制卡片背景（半透明）
     const cardW = 320;
     const cardH = 380;
     const cardX = centerX - cardW / 2;
@@ -1190,7 +1228,7 @@ class Main {
     ctx.shadowColor = 'rgba(0,0,0,0.2)';
     ctx.shadowBlur = 20;
     ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
     ctx.fill();
     ctx.restore();
@@ -1709,12 +1747,12 @@ class Main {
       ctx.font = '20px sans-serif';
       ctx.fillText(detail, centerX, detailY);
     } else {
-      // 绘制卡片背景
+      // 绘制卡片背景（半透明）
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.2)';
       ctx.shadowBlur = 20;
       ctx.shadowOffsetY = 10;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
       ctx.fill();
       ctx.restore();
