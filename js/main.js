@@ -1,18 +1,26 @@
 // =======================================================
-// 圣诞兔兔跳一跳 - 微信小游戏版本（位置下移 + 慢速待机版 + 社交玩法）
+// 🐰 圣诞兔兔跳一跳 (Christmas Bunny Jump)
+// =======================================================
+// 版本特性：
+// 1. 核心玩法：垂直跳跃平台跳跃
+// 2. 进阶机制：3000分后解锁连击、飞鸟、特殊铃铛
+// 3. 社交系统：星星获取、送出与复活机制
 // =======================================================
 
-// 帧循环封装：兼容小游戏 + H5
+/**
+ * 帧循环封装：兼容小游戏环境(requestAnimationFrame)与普通环境
+ */
 const raf = (typeof requestAnimationFrame === 'function')
   ? function (cb) { return requestAnimationFrame(cb); }
   : function (cb) { return setTimeout(cb, 1000 / 60); };
 
-// 屏幕 & Canvas 初始化
+// --- 屏幕 & Canvas 初始化 ---
 const isWeChat = typeof wx !== 'undefined';
 
 let screenWidth, screenHeight;
 let canvas, ctx;
 
+// 适配微信小游戏环境
 if (isWeChat) {
   const sysInfo = wx.getSystemInfoSync();
   screenWidth = sysInfo.windowWidth;
@@ -22,6 +30,7 @@ if (isWeChat) {
   canvas.height = screenHeight;
   ctx = canvas.getContext('2d');
 } else {
+  // 适配浏览器调试环境
   screenWidth = window.innerWidth;
   screenHeight = window.innerHeight;
   canvas = document.getElementById('gameCanvas');
@@ -38,29 +47,36 @@ if (isWeChat) {
 
 const GAMEOVER_RESTART_DELAY = 1500;
 
-// 常量配置
+/**
+ * 游戏常量配置
+ */
 const CONSTANTS = {
-  GRAVITY: 0.15,
-  JUMP_FORCE: -8.5,
-  BOOST_FORCE: -12.5,
-  MOVE_SPEED: 0.18,
-  BELL_SPAWN_RATE: 70,
+  // 物理参数
+  GRAVITY: 0.15,          // 重力加速度
+  JUMP_FORCE: -8.5,       // 普通跳跃力度
+  BOOST_FORCE: -12.5,     // 强力跳跃力度
+  MOVE_SPEED: 0.18,       // 左右移动灵敏度
+  BELL_SPAWN_RATE: 70,    // 铃铛生成的垂直间距
+
+  // 颜色配置
   COLORS: {
-    bgStart: '#0b1026',
-    bgEnd: '#2b3266',
+    bgStart: '#0b1026',   // 背景渐变上色
+    bgEnd: '#2b3266',     // 背景渐变下色
     snow: '#ffffff',
     bellNormal: '#f8fafc',
-    bellBoost: '#dc2626',
-    bellGold: '#fbbf24',
-    bellIce: '#67e8f9',
-    bellMoving: '#a855f7',
+    bellBoost: '#dc2626', // 红色
+    bellGold: '#fbbf24',  // 金色
+    bellIce: '#67e8f9',   // 冰蓝色
+    bellMoving: '#a855f7',// 紫色
     bow: '#facc15'
   },
+
+  // 进阶玩法配置 (3000分后)
   ADVANCED_MECHANICS: {
     LATEGAME_START_SCORE: 3000,
-    COMBO_DECAY_TIME: 2500,
-    COMBO_MAX_BONUS: 3.0,
-    BIRD_SPAWN_RATE: 0.008,
+    COMBO_DECAY_TIME: 2500,       // 连击失效时间(ms)
+    COMBO_MAX_BONUS: 3.0,         // 最大连击加成倍率
+    BIRD_SPAWN_RATE: 0.008,       // 飞鸟生成概率/帧
     BIRD_SPEED_MIN: 1.5,
     BIRD_SPEED_MAX: 3.0,
     MOVING_BELL_PROBABILITY: 0.12,
@@ -69,30 +85,41 @@ const CONSTANTS = {
     MOVING_BELL_SPEED: 0.8,
     ICE_EFFECT_DURATION: 1500
   },
+
+  // 社交玩法配置
   SOCIAL: {
-    FIRST_STAR_SCORE: 5000,
-    MAX_STARS: 1,
-    STAR_SEND_BONUS: 100,
+    FIRST_STAR_SCORE: 5000,       // 首次获得星星的分数门槛
+    MAX_STARS: 1,                 // 最大持有星星数
+    STAR_SEND_BONUS: 100,         // 送星奖励分
+    // 假玩家名字库，用于显示"XXX送来星星"
     FAKE_PLAYER_NAMES: ['小雪', '星星', '暖暖', '冬冬', '乐乐', '美美', '天天', '开心', '快乐', '幸运'],
-    STAR_RECEIVE_PROBABILITY: 1.0,
-    RESPAWN_Y_OFFSET: 200,
-    RESPAWN_GRACE_TIME: 3000
+    STAR_RECEIVE_PROBABILITY: 1.0, // 收到星星复活的概率 (1.0 = 100%)
+    RESPAWN_Y_OFFSET: 200,         // 复活时向上托起的高度
+    RESPAWN_GRACE_TIME: 3000       // 复活后的无敌时间
   }
 };
 
+/**
+ * 音频控制器
+ * 使用 WebAudio API 实时合成音效，无需加载外部音频文件，减少包体积
+ */
 class AudioController {
   constructor() {
     this.ctx = null;
     this.bgm = null;
+
+    // 初始化 AudioContext
     if (isWeChat && typeof wx !== 'undefined' && typeof wx.createWebAudioContext === 'function') {
       try { this.ctx = wx.createWebAudioContext(); } catch (e) { }
     } else if (typeof window !== 'undefined') {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (typeof AC === 'function') { try { this.ctx = new AC(); } catch (e) { } }
     }
+
     this.initBGM();
   }
 
+  // 初始化背景音乐 (使用 InnerAudioContext)
   initBGM() {
     try {
       if (isWeChat && typeof wx !== 'undefined' && typeof wx.createInnerAudioContext === 'function') {
@@ -124,6 +151,7 @@ class AudioController {
     } catch (e) { }
   }
 
+  // 合成跳跃音效
   playJump(type) {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -133,8 +161,9 @@ class AudioController {
     gain.connect(this.ctx.destination);
 
     let duration = 1.0;
+    // 根据铃铛类型改变音色
     if (type === 'BOOST' || type === 'MOVING') {
-      osc.type = 'triangle';
+      osc.type = 'triangle'; // 三角波
       osc.frequency.setValueAtTime(1100, t);
       osc.frequency.linearRampToValueAtTime(1105, t + 0.1);
       gain.gain.setValueAtTime(0.1, t);
@@ -155,7 +184,7 @@ class AudioController {
       gain.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
       duration = 0.8;
     } else {
-      osc.type = 'sine';
+      osc.type = 'sine'; // 正弦波
       osc.frequency.setValueAtTime(880, t);
       osc.frequency.exponentialRampToValueAtTime(440, t + 1.0);
       gain.gain.setValueAtTime(0.3, t);
@@ -164,6 +193,7 @@ class AudioController {
     try { osc.start(t); osc.stop(t + duration); } catch (e) { }
   }
 
+  // 合成掉落音效 (锯齿波)
   playFall() {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -179,6 +209,7 @@ class AudioController {
     try { osc.start(t); osc.stop(t + 0.8); } catch (e) { }
   }
 
+  // 合成连击音效 (音调随 Combo 升高)
   playCombo(combo) {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -186,6 +217,7 @@ class AudioController {
     const t = this.ctx.currentTime;
     osc.connect(gain);
     gain.connect(this.ctx.destination);
+    
     const baseFreq = 880 + (combo * 50);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(baseFreq, t);
@@ -196,6 +228,9 @@ class AudioController {
   }
 }
 
+/**
+ * 辅助函数：绘制圆角矩形
+ */
 function drawRoundedRectPath(context, x, y, w, h, r) {
   const minSize = Math.min(w, h);
   if (r > minSize / 2) r = minSize / 2;
@@ -328,9 +363,7 @@ export default class Main {
     const loadGroup = (prefix, count, targetArray, padZero = false) => {
       for (let i = 0; i < count; i++) {
         let indexStr = i.toString();
-        if (padZero) {
-          indexStr = indexStr.padStart(2, '0');
-        }
+        if (padZero) indexStr = indexStr.padStart(2, '0');
         const src = 'images/' + prefix + '_' + indexStr + '.png'; 
         
         let img;
@@ -375,8 +408,10 @@ export default class Main {
     }
   }
 
+  // --- 游戏重置 ---
   reset() {
     this.score = 0;
+    // 从本地存储读取数据
     if (isWeChat && typeof wx !== 'undefined' && typeof wx.getStorageSync === 'function') {
       this.highScore = Number(wx.getStorageSync('highscore') || 0);
       this.stars = Number(wx.getStorageSync('stars') || 0);
@@ -392,6 +427,7 @@ export default class Main {
       this.starsSent = 0;
     }
 
+    // 初始化兔子位置
     this.rabbit = {
       x: screenWidth / 2,
       y: screenHeight - 135,
@@ -410,14 +446,16 @@ export default class Main {
     this.difficulty = 0;
     this.bellSpacing = this.baseBellSpacing;
 
+    // 清空实体数组
     this.bells = [];
     this.particles = [];
     this.scorePopups = [];
     this.backgroundStars = [];
     this.snowflakes = [];
     this.trees = [];
-    
     this.birds = [];
+    
+    // 重置状态
     this.combo = 0;
     this.maxCombo = 0;
     this.comboTimer = 0;
@@ -425,6 +463,7 @@ export default class Main {
     this.activeEffects = [];
     this.lastComboScore = 0;
     
+    // 重置社交状态
     this.receiveStarAvailable = false;
     this.respawnGraceTimer = 0;
     this.respawnAnimation = null;
@@ -438,21 +477,28 @@ export default class Main {
     this.initWorld();
   }
 
+  // 初始化世界场景
   initWorld() {
+    // 背景装饰
     for (let i = 0; i < 60; i++) {
       this.backgroundStars.push({ x: Math.random() * screenWidth, y: Math.random() * screenHeight, size: Math.random() * 2, alpha: Math.random() });
     }
     for (let i = 0; i < 50; i++) {
       this.snowflakes.push({ x: Math.random() * screenWidth, y: Math.random() * screenHeight, size: 2 + Math.random() * 3, speed: 0.2 + Math.random() * 0.8, swayOffset: Math.random() * Math.PI * 2 });
     }
+    // 初始铃铛
     for (let i = 0; i < 10; i++) {
       this.spawnBell(screenHeight - 250 - (i * this.baseBellSpacing));
     }
+    // 地面装饰树
     for (let i = 0; i < 6; i++) {
       this.trees.push({ x: Math.random() * screenWidth, y: this.groundY + 15, width: 50 + Math.random() * 40, height: 100 + Math.random() * 80, color: i % 2 === 0 ? '#14532d' : '#166534' });
     }
   }
 
+  // --- 生成逻辑 ---
+  
+  // 生成铃铛（平台）
   spawnBell(y) {
     const difficulty = this.difficulty || 0;
     const SCORE_LEVEL_THRESHOLDS = [0, 3000, 5000, 7000, 9000, 11000];
@@ -482,6 +528,7 @@ export default class Main {
     const isLateGame = this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE;
     const rand = Math.random();
 
+    // 进阶阶段的特殊铃铛生成
     if (isLateGame) {
       if (this.score >= 6000 && rand < CONSTANTS.ADVANCED_MECHANICS.GOLD_BELL_PROBABILITY) {
         bellData.type = 'GOLD';
@@ -506,6 +553,7 @@ export default class Main {
     this.bells.push(bellData);
   }
 
+  // 生成飞鸟（敌人）
   spawnBird(y) {
     const config = CONSTANTS.ADVANCED_MECHANICS;
     const fromLeft = Math.random() > 0.5;
@@ -541,11 +589,13 @@ export default class Main {
     });
   }
 
+  // --- 输入处理 ---
   touchHandler(e) {
     const x = e.touches[0].clientX;
     const y = e.touches[0].clientY;
     const isTouchStart = e.type === 'touchstart';
 
+    // 菜单 -> 开始游戏
     if (this.state === 'MENU') {
       if (!isTouchStart) return;
       this.reset();
@@ -559,6 +609,7 @@ export default class Main {
       return;
     }
 
+    // 游戏结束 -> 按钮交互或重试
     if (this.state === 'GAMEOVER') {
       if (this.sendButtonArea && isTouchStart) {
         if (x >= this.sendButtonArea.x && x <= this.sendButtonArea.x + this.sendButtonArea.w &&
@@ -588,14 +639,17 @@ export default class Main {
       return;
     }
 
+    // 游戏中 -> 移动
     if (this.state === 'PLAYING') {
       this.targetX = x;
     }
   }
 
+  // --- 游戏逻辑更新 ---
   update() {
     this.updateSnowflakes();
 
+    // 游戏结束逻辑
     if (this.state === 'GAMEOVER') {
       if (!this.isRespawning) {
         const now = Date.now();
@@ -606,6 +660,7 @@ export default class Main {
         }
         if (!this.canRestart && timeSinceDeath > GAMEOVER_RESTART_DELAY) this.canRestart = true;
       }
+      // 更新复活动画
       if (this.isRespawning && this.respawnAnimation) {
         this.updateRespawnAnimation();
       }
@@ -618,6 +673,7 @@ export default class Main {
     this.difficulty = Math.min(1.5, this.cameraY / (screenHeight * 4));
     const difficulty = this.difficulty;
 
+    // 移动控制 (冰冻减速)
     let moveMultiplier = 1.0;
     if (this.iceEffectTimer > 0) {
       moveMultiplier = 0.5;
@@ -634,6 +690,7 @@ export default class Main {
     if (this.rabbit.x > screenWidth) this.rabbit.x = 0;
     if (this.rabbit.x < 0) this.rabbit.x = screenWidth;
 
+    // 物理重力
     let currentGravity = CONSTANTS.GRAVITY * (1 + difficulty * 0.4);
     if (Math.abs(this.rabbit.vy) < 1.5) currentGravity *= 0.65;
     this.rabbit.vy += currentGravity;
@@ -641,6 +698,7 @@ export default class Main {
 
     this.rabbit.rotation = (this.targetX !== undefined ? this.targetX - this.rabbit.x : 0) * 0.003;
 
+    // 死亡判定 (复活无敌时间)
     const absoluteGroundY = this.groundY + this.cameraY;
     
     if (this.respawnGraceTimer > 0) {
@@ -652,6 +710,7 @@ export default class Main {
       if (absoluteGroundY < screenHeight && this.rabbit.y + this.rabbit.height / 2 >= absoluteGroundY) this.gameOver();
     }
 
+    // 连击计时器
     if (isLateGame) {
       if (this.comboTimer > 0) {
         this.comboTimer -= 16.67;
@@ -661,6 +720,7 @@ export default class Main {
       }
     }
 
+    // 摄像机跟随与分数计算
     const threshold = screenHeight * 0.45;
     if (this.rabbit.y < threshold) {
       const diff = threshold - this.rabbit.y;
@@ -674,8 +734,9 @@ export default class Main {
       }
       this.score += scoreGain;
 
-      this.checkStarEarn();
+      this.checkStarEarn(); // 检查是否获得星星
 
+      // 更新所有实体位置
       this.bellSpacing = this.baseBellSpacing + difficulty * 40;
       this.bells.forEach(b => { b.y += diff; });
       this.particles.forEach(p => { p.y += diff; });
@@ -687,6 +748,7 @@ export default class Main {
       const highestBellY = this.bells.length > 0 ? this.bells[this.bells.length - 1].y : 0;
       if (highestBellY > -50) this.spawnBell(highestBellY - this.bellSpacing);
 
+      // 生成飞鸟
       if (isLateGame && Math.random() < CONSTANTS.ADVANCED_MECHANICS.BIRD_SPAWN_RATE * (1 + difficulty * 0.2)) {
         if (this.birds.length < 3) {
           const birdY = this.rabbit.y - 100 - Math.random() * 150;
@@ -695,6 +757,7 @@ export default class Main {
       }
     }
 
+    // 更新移动铃铛
     if (isLateGame) {
       this.bells.forEach(bell => {
         if (bell.type === 'MOVING' && bell.active) {
@@ -706,6 +769,7 @@ export default class Main {
       });
     }
 
+    // 更新飞鸟
     this.birds.forEach(bird => {
       bird.x += bird.speed;
       bird.wingAngle += 0.3;
@@ -715,7 +779,9 @@ export default class Main {
     });
     this.birds = this.birds.filter(b => b.active);
 
+    // 碰撞检测 (仅下落时)
     if (this.rabbit.vy > 0) {
+      // 铃铛碰撞
       this.bells.forEach(bell => {
         if (!bell.active) return;
         const dist = Math.sqrt(Math.pow(this.rabbit.x - bell.x, 2) + Math.pow((this.rabbit.y + 15) - bell.y, 2));
@@ -749,6 +815,7 @@ export default class Main {
             this.spawnEffectPopup('FREEZE!', CONSTANTS.COLORS.bellIce);
           }
           
+          // 计算最终跳跃力和 Combo
           let jumpForce = baseForce * (1 + difficulty * 0.25);
           if (isLateGame && this.combo > 0) {
             const comboBonus = Math.min(0.3, this.combo * 0.03);
@@ -785,6 +852,7 @@ export default class Main {
         }
       });
 
+      // 飞鸟碰撞检测
       this.birds.forEach(bird => {
         if (!bird.active) return;
         const dx = this.rabbit.x - bird.x;
@@ -795,6 +863,7 @@ export default class Main {
       });
     }
 
+    // 清理逻辑
     this.bells = this.bells.filter(b => b.y < screenHeight + 50);
     this.particles.forEach(p => {
       p.age++;
@@ -814,6 +883,7 @@ export default class Main {
     });
     this.activeEffects = this.activeEffects.filter(e => e.life > 0);
 
+    // 复活动画更新
     if (this.isRespawning && this.respawnAnimation) {
       this.updateRespawnAnimation();
     }
@@ -829,9 +899,12 @@ export default class Main {
     });
   }
 
+  // --- 社交玩法逻辑 ---
+  
   checkStarEarn() {
     if (!this.canGetStar) return;
     
+    // 获取条件：首次 >5000分 或 打破记录
     const canEarn = (this.stars === 0 && this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE) || (this.score > this.highScore);
     
     if (canEarn) {
@@ -868,6 +941,8 @@ export default class Main {
     this.gameOverUIAlpha = 0;
     this.audio.playFall();
     this.audio.stopBGM();
+    
+    // 更新最高分
     if (this.score > this.highScore) {
       this.highScore = this.score;
       if (isWeChat && typeof wx !== 'undefined' && typeof wx.setStorageSync === 'function') {
@@ -877,12 +952,14 @@ export default class Main {
       }
     }
 
+    // 触发自动复活逻辑 (伪社交)
     if (this.score >= 1000 && !this.hasReceivedStarThisGame && Math.random() < 1.0) {
       const fakeName = CONSTANTS.SOCIAL.FAKE_PLAYER_NAMES[Math.floor(Math.random() * CONSTANTS.SOCIAL.FAKE_PLAYER_NAMES.length)];
       this.startRespawnAnimation(fakeName);
       return;
     }
 
+    // 设置送出按钮区域
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
     this.sendButtonArea = this.stars > 0 ? { x: centerX - 100, y: centerY + 120, w: 200, h: 60 } : null;
@@ -1008,6 +1085,8 @@ export default class Main {
     }
   }
 
+  // --- 绘图函数 ---
+  
   drawStar(x, y, size, color) {
     ctx.save();
     ctx.translate(x, y);
