@@ -1528,27 +1528,6 @@ class Main {
       }
     }
 
-
-
-    if (this.respawnButtonArea && this.state === 'GAMEOVER' && this.receiveStarAvailable) {
-      const btn = this.respawnButtonArea;
-      ctx.save();
-      const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
-      ctx.fillStyle = 'rgba(16, 185, 129, ' + pulse + ')';
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetY = 3;
-      drawRoundedRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 25);
-      ctx.fill();
-      
-      ctx.shadowBlur = 0;
-      
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('✨ 复活', btn.x + btn.w / 2, btn.y + btn.h / 2);
-      ctx.restore();
-    }
-
     ctx.restore();
   }
 
@@ -1650,6 +1629,14 @@ class Main {
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
 
+    // 游戏结束状态需要更大的卡片来容纳所有信息
+    const isGameOver = this.state === 'GAMEOVER' && !this.isRespawning;
+    const hasExtraInfo = isGameOver && (this.stars > 0 || this.starsSent > 0 || this.receiveStarAvailable || this.canGetStar);
+    const cardW = 320;
+    const cardH = hasExtraInfo ? 520 : 340;
+    const cardX = centerX - cardW / 2;
+    const cardY = centerY - cardH / 2;
+
     if (showLogo && this.titleImage && this.titleImageLoaded) {
       const img = this.titleImage;
       const maxWidth = Math.min(screenWidth * 0.8, img.width);
@@ -1676,10 +1663,7 @@ class Main {
       ctx.font = '20px sans-serif';
       ctx.fillText(detail, centerX, detailY);
     } else {
-      const cardW = 320;
-      const cardH = 340;
-      const cardX = centerX - cardW / 2;
-      const cardY = centerY - cardH / 2;
+      // 绘制卡片背景
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.2)';
       ctx.shadowBlur = 20;
@@ -1689,68 +1673,120 @@ class Main {
       ctx.fill();
       ctx.restore();
 
-      ctx.font = 'bold 42px sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText(title, centerX, cardY + 140);
-      const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
-      ctx.fillText(subtitle, centerX, cardY + 200);
-      ctx.fillStyle = '#64748b';
-      ctx.font = '20px sans-serif';
-      ctx.fillText(detail, centerX, cardY + 250);
-    }
+      // 根据不同状态计算元素位置
+      if (isGameOver) {
+        // 游戏结束的布局：所有信息都在卡片内部，从上到下排列
+        let currentY = cardY + 60;
 
-    if (this.state === 'GAMEOVER' && !this.isRespawning) {
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 32px sans-serif';
+        // 1. 标题
+        ctx.font = 'bold 42px sans-serif';
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(title, centerX, currentY);
+        currentY += 50;
 
-      if (this.receiveStarAvailable) {
-        ctx.fillStyle = '#10b981';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 10;
-        ctx.fillText('✨ 有机会复活！', centerX, centerY - 80);
+        // 2. 得分详情
+        ctx.font = '20px sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText(detail, centerX, currentY);
+        currentY += 45;
 
-        this.respawnButtonArea = { x: centerX - 100, y: centerY + 80, w: 200, h: 50 };
-        ctx.save();
-        const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
-        ctx.fillStyle = 'rgba(16, 185, 129, ' + pulse + ')';
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 3;
-        drawRoundedRectPath(ctx, centerX - 100, centerY + 80, 200, 50, 25);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('✨ 复活', centerX, centerY + 105);
-        ctx.restore();
-      } else {
-        if (this.stars > 0) {
-          ctx.fillStyle = '#fbbf24';
-          ctx.shadowColor = 'rgba(0,0,0,0.5)';
-          ctx.shadowBlur = 10;
-          ctx.fillText('⭐ 拥有星星', centerX, centerY - 60);
-        } else if (this.canGetStar) {
+        // 3. 连击信息（如果有）
+        if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
+          ctx.font = '18px sans-serif';
           ctx.fillStyle = '#94a3b8';
-          ctx.shadowBlur = 0;
-          ctx.fillText('未获得星星', centerX, centerY - 60);
-        } else {
-          ctx.fillStyle = '#64748b';
-          ctx.shadowBlur = 0;
-          ctx.fillText('这局已使用', centerX, centerY - 60);
+          ctx.fillText('最大连击: ' + this.maxCombo + 'x', centerX, currentY);
+          currentY += 35;
         }
-      }
 
-      if (this.starsSent > 0) {
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText('帮助过 ' + this.starsSent + ' 位玩家', centerX, centerY - 30);
-      }
+        // 4. 分割线
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cardX + 30, currentY);
+        ctx.lineTo(cardX + cardW - 30, currentY);
+        ctx.stroke();
+        currentY += 35;
 
-      ctx.restore();
+        // 5. 星星状态信息
+        if (this.receiveStarAvailable) {
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillStyle = '#10b981';
+          ctx.fillText('✨ 有机会复活！', centerX, currentY);
+          currentY += 55;
+
+          // 复活按钮
+          this.respawnButtonArea = { x: centerX - 100, y: currentY - 12, w: 200, h: 50 };
+          ctx.save();
+          const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
+          ctx.fillStyle = 'rgba(16, 185, 129, ' + pulse + ')';
+          ctx.shadowColor = 'rgba(0,0,0,0.3)';
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 3;
+          drawRoundedRectPath(ctx, centerX - 100, currentY - 12, 200, 50, 25);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillText('✨ 复活', centerX, currentY + 13);
+          ctx.restore();
+          currentY += 60;
+        } else if (this.stars > 0 || this.canGetStar || this.starsSent > 0) {
+          // 星星数量
+          if (this.stars > 0 || this.canGetStar) {
+            ctx.font = '24px sans-serif';
+            ctx.fillStyle = '#fbbf24';
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 8;
+            ctx.fillText('⭐ ' + this.stars + ' 颗星星', centerX, currentY);
+            ctx.shadowBlur = 0;
+            currentY += 30;
+          }
+
+          // 帮助人数
+          if (this.starsSent > 0) {
+            ctx.font = '18px sans-serif';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText('已帮助 ' + this.starsSent + ' 位玩家', centerX, currentY);
+            currentY += 30;
+          }
+
+          // 获取提示
+          if (this.canGetStar) {
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText('再接再厉，达成目标可获得星星', centerX, currentY);
+            currentY += 30;
+          } else if (this.stars > 0) {
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText('星星可帮助其他玩家复活', centerX, currentY);
+            currentY += 30;
+          }
+        }
+
+        // 6. 底部提示
+        if (!this.receiveStarAvailable) {
+          const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
+          ctx.font = 'bold 24px sans-serif';
+          ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
+          ctx.fillText(subtitle, centerX, cardY + cardH - 50);
+        }
+      } else {
+        // 菜单等其他状态：简化布局
+        ctx.font = 'bold 42px sans-serif';
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(title, centerX, cardY + 140);
+
+        const pulse = 0.6 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.4;
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillStyle = 'rgba(239, 68, 68,' + pulse + ')';
+        ctx.fillText(subtitle, centerX, cardY + 200);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '20px sans-serif';
+        ctx.fillText(detail, centerX, cardY + 250);
+      }
     }
 
     ctx.restore();
