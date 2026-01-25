@@ -247,7 +247,7 @@ function drawRoundedRectPath(context, x, y, w, h, r) {
   context.closePath();
 }
 
-class Main {
+export default class Main {
     constructor() {
         this.audio = new AudioController();
       
@@ -278,10 +278,7 @@ class Main {
         this.canRestart = true;
         this.lastGameOverTime = 0;
         this.gameOverUIAlpha = 0;
-        // 游戏结束阶段：'star_send'（星星送出阶段）或 'restart'（重开阶段）
-        this.gameOverPhase = 'star_send';
-        this.hasHandledStar = false;
-
+      
         this.score = 0;
         this.highScore = 0;
       
@@ -477,9 +474,6 @@ class Main {
     this.respawnButtonArea = null;
     
     this.gameOverUIAlpha = 0;
-    // 游戏结束阶段重置
-    this.gameOverPhase = 'star_send';
-    this.hasHandledStar = false;
     this.initWorld();
   }
 
@@ -617,37 +611,14 @@ class Main {
 
     // 游戏结束 -> 按钮交互或重试
     if (this.state === 'GAMEOVER') {
-      // 星星送出阶段的交互
-      if (this.gameOverPhase === 'star_send') {
-        if (this.sendButtonArea && isTouchStart) {
-          if (x >= this.sendButtonArea.x && x <= this.sendButtonArea.x + this.sendButtonArea.w &&
-              y >= this.sendButtonArea.y && y <= this.sendButtonArea.y + this.sendButtonArea.h) {
-            this.sendStar();
-            this.sendButtonArea = null;
-            return;
-          }
-        }
-        // 检查是否点击跳过按钮区域
-        const centerX = screenWidth / 2;
-        const centerY = screenHeight / 2;
-        const cardW = 320;
-        const cardH = 380;
-        const cardX = centerX - cardW / 2;
-        const cardY = centerY - cardH / 2;
-        const skipBtn = { x: cardX + 100, y: cardY + 320, w: 120, h: 40 };
-        
-        if (isTouchStart && 
-            x >= skipBtn.x && x <= skipBtn.x + skipBtn.w &&
-            y >= skipBtn.y && y <= skipBtn.y + skipBtn.h) {
-          this.gameOverPhase = 'restart';
-          this.hasHandledStar = true;
+      if (this.sendButtonArea && isTouchStart) {
+        if (x >= this.sendButtonArea.x && x <= this.sendButtonArea.x + this.sendButtonArea.w &&
+            y >= this.sendButtonArea.y && y <= this.sendButtonArea.y + this.sendButtonArea.h) {
+          this.sendStar();
           this.sendButtonArea = null;
           return;
         }
-        return; // star_send 阶段不允许其他操作
       }
-
-      // 复活按钮
       if (this.respawnButtonArea && isTouchStart) {
         if (x >= this.respawnButtonArea.x && x <= this.respawnButtonArea.x + this.respawnButtonArea.w &&
             y >= this.respawnButtonArea.y && y <= this.respawnButtonArea.y + this.respawnButtonArea.h) {
@@ -656,7 +627,6 @@ class Main {
         }
       }
 
-      // restart 阶段允许重开
       if (!this.canRestart || !isTouchStart) return;
       this.reset();
       this.state = 'PLAYING';
@@ -688,10 +658,7 @@ class Main {
           this.gameOverUIAlpha += 0.03; 
           if (this.gameOverUIAlpha > 1) this.gameOverUIAlpha = 1;
         }
-        // 只有在 restart 阶段才能重开
-        if (!this.canRestart && this.gameOverPhase === 'restart' && timeSinceDeath > GAMEOVER_RESTART_DELAY) {
-          this.canRestart = true;
-        }
+        if (!this.canRestart && timeSinceDeath > GAMEOVER_RESTART_DELAY) this.canRestart = true;
       }
       // 更新复活动画
       if (this.isRespawning && this.respawnAnimation) {
@@ -992,20 +959,10 @@ class Main {
       return;
     }
 
-    // 重置游戏结束阶段
-    this.gameOverPhase = 'star_send';
-    this.hasHandledStar = false;
-
-    // 设置送出按钮区域（仅在星星送出阶段）
+    // 设置送出按钮区域
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
     this.sendButtonArea = this.stars > 0 ? { x: centerX - 100, y: centerY + 120, w: 200, h: 60 } : null;
-
-    // 如果没有星星，直接进入重开阶段
-    if (this.stars <= 0) {
-      this.gameOverPhase = 'restart';
-      this.hasHandledStar = true;
-    }
   }
 
   saveSocialData() {
@@ -1031,10 +988,6 @@ class Main {
         y: screenHeight * 0.5
       });
       this.sendButtonArea = null;
-
-      // 切换到重开阶段
-      this.gameOverPhase = 'restart';
-      this.hasHandledStar = true;
     }
   }
 
@@ -1134,106 +1087,6 @@ class Main {
 
   // --- 绘图函数 ---
   
-  drawStarSendUI(detail, alpha = 1) {
-    if (alpha <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(11, 16, 38, 0.85)';
-    ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const centerX = screenWidth / 2;
-    const centerY = screenHeight / 2;
-
-    // 绘制卡片背景
-    const cardW = 320;
-    const cardH = 380;
-    const cardX = centerX - cardW / 2;
-    const cardY = centerY - cardH / 2;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
-    ctx.fill();
-    ctx.restore();
-
-    // 绘制星星图标
-    const starY = cardY + 100;
-    const starSize = 60 + Math.sin(Date.now() * 0.005) * 5;
-    ctx.save();
-    ctx.shadowColor = '#fbbf24';
-    ctx.shadowBlur = 20;
-    this.drawStar(centerX, starY, starSize, '#fbbf24');
-    ctx.restore();
-
-    // 绘制标题
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillStyle = '#1e293b';
-    ctx.fillText('游戏结束', centerX, cardY + 180);
-
-    // 绘制得分
-    ctx.font = '20px sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText(detail, centerX, cardY + 220);
-
-    // 绘制提示文字
-    ctx.font = 'bold 24px sans-serif';
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillText('送出星星帮助他人', centerX, cardY + 280);
-
-    // 绘制送出星星按钮
-    if (this.sendButtonArea) {
-      const btn = this.sendButtonArea;
-      ctx.save();
-      const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
-      ctx.fillStyle = 'rgba(251, 191, 36, ' + pulse + ')';
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 15;
-      ctx.shadowOffsetY = 5;
-      drawRoundedRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 30);
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-      ctx.save();
-      ctx.translate(btn.x + btn.w / 2 - 15, btn.y + btn.h / 2);
-      this.drawStar(0, 0, 12, '#fef08a');
-      ctx.restore();
-
-      ctx.restore();
-
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText('⭐ 送出星星', btn.x + btn.w / 2, btn.y + btn.h / 2);
-      ctx.restore();
-    }
-
-    // 绘制跳过按钮
-    const skipBtn = { x: cardX + 100, y: cardY + 320, w: 120, h: 40 };
-    ctx.save();
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
-    ctx.shadowColor = 'rgba(0,0,0,0.1)';
-    ctx.shadowBlur = 8;
-    drawRoundedRectPath(ctx, skipBtn.x, skipBtn.y, skipBtn.w, skipBtn.h, 20);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('跳过', skipBtn.x + skipBtn.w / 2, skipBtn.y + skipBtn.h / 2);
-    ctx.restore();
-
-    ctx.restore();
-  }
-
   drawStar(x, y, size, color) {
     ctx.save();
     ctx.translate(x, y);
@@ -1488,47 +1341,61 @@ class Main {
       ctx.restore();
     });
 
-    // 显示星星数量和帮助人数（在右上角）
-    ctx.save();
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillStyle = '#fbbf24';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
-
-    if (this.starsSent > 0) {
-      ctx.font = '18px sans-serif';
-      ctx.fillStyle = '#94a3b8';
-      ctx.shadowBlur = 0;
-      ctx.fillText('帮助过 ' + this.starsSent + ' 人', screenWidth - 20, 45);
-    }
-    ctx.restore();
-
     if (!this.isRespawning) {
       if (this.state === 'MENU') {
         this.drawUIOverlay('圣诞跳一跳', '点击开始游戏', '最高分: ' + this.highScore, 1);
       } else if (this.state === 'GAMEOVER') {
-        // 根据游戏结束阶段显示不同界面
-        if (this.gameOverPhase === 'star_send') {
-          // 阶段1：星星送出界面
-          let detail = '得分: ' + this.score;
-          if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
-            detail += ' | 最大连击: ' + this.maxCombo + 'x';
-          }
-          this.drawStarSendUI(detail, this.gameOverUIAlpha);
-        } else if (this.gameOverPhase === 'restart') {
-          // 阶段2：重开界面
-          let detail = '得分: ' + this.score;
-          if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
-            detail += ' | 最大连击: ' + this.maxCombo + 'x';
-          }
-          this.drawUIOverlay('游戏结束', '点击重试', detail, this.gameOverUIAlpha, false);
+        let detail = '得分: ' + this.score;
+        if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
+          detail += ' | 最大连击: ' + this.maxCombo + 'x';
         }
+        this.drawUIOverlay('游戏结束', '点击重试', detail, this.gameOverUIAlpha);
+        
+        ctx.save();
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillStyle = '#fbbf24';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 8;
+        ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
+        
+        if (this.starsSent > 0) {
+          ctx.font = '18px sans-serif';
+          ctx.fillStyle = '#94a3b8';
+          ctx.shadowBlur = 0;
+          ctx.fillText('帮助过 ' + this.starsSent + ' 人', screenWidth - 20, 45);
+        }
+        ctx.restore();
       }
     }
 
+    if (this.sendButtonArea && this.state === 'GAMEOVER') {
+      const btn = this.sendButtonArea;
+      ctx.save();
+      const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
+      ctx.fillStyle = 'rgba(251, 191, 36, ' + pulse + ')';
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 15;
+      ctx.shadowOffsetY = 5;
+      drawRoundedRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 30);
+      ctx.fill();
+      
+      ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.translate(btn.x + btn.w / 2 - 15, btn.y + btn.h / 2);
+      this.drawStar(0, 0, 12, '#fef08a');
+      ctx.restore();
 
+      ctx.restore();
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('⭐ 送出星星', btn.x + btn.w / 2, btn.y + btn.h / 2);
+      ctx.restore();
+    }
 
     if (this.respawnButtonArea && this.state === 'GAMEOVER' && this.receiveStarAvailable) {
       const btn = this.respawnButtonArea;
@@ -1638,7 +1505,7 @@ class Main {
     ctx.restore();
   }
 
-  drawUIOverlay(title, subtitle, detail, alpha = 1, showLogo = true) {
+  drawUIOverlay(title, subtitle, detail, alpha = 1) {
     if (alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1650,7 +1517,7 @@ class Main {
     const centerX = screenWidth / 2;
     const centerY = screenHeight / 2;
 
-    if (showLogo && this.titleImage && this.titleImageLoaded) {
+    if (this.titleImage && this.titleImageLoaded) {
       const img = this.titleImage;
       const maxWidth = Math.min(screenWidth * 0.8, img.width);
       const scale = maxWidth / img.width;
@@ -1908,5 +1775,3 @@ class Main {
 }
 
 
-
-export default Main;

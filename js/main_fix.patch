@@ -1,0 +1,219 @@
+// =======================================================
+// 🐰 圣诞兔兔跳一跳 (Christmas Bunny Jump) - 修复补丁
+// =======================================================
+// 修复：游戏结束后的界面叠加问题
+// 说明：确保星星送出界面和重开界面是前后关系
+// =======================================================
+
+// 步骤1：在 constructor() 中添加游戏结束阶段状态
+// 在 this.gameOverUIAlpha = 0; 后面添加：
+/*
+        // 游戏结束阶段：'star_send'（星星送出阶段）或 'restart'（重开阶段）
+        this.gameOverPhase = 'star_send';
+        this.hasHandledStar = false;
+*/
+
+// 步骤2：在 reset() 方法中重置游戏结束阶段状态
+// 在 this.gameOverUIAlpha = 0; 后面添加：
+/*
+        this.gameOverPhase = 'star_send';
+        this.hasHandledStar = false;
+*/
+
+// 步骤3：在 gameOver() 方法中设置初始阶段
+// 替换为以下代码：
+/*
+  gameOver() {
+    this.state = 'GAMEOVER';
+    this.canRestart = false;
+    this.lastGameOverTime = Date.now();
+    this.gameOverUIAlpha = 0;
+    this.audio.playFall();
+    this.audio.stopBGM();
+
+    // 更新最高分
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      if (isWeChat && typeof wx !== 'undefined' && typeof wx.setStorageSync === 'function') {
+        wx.setStorageSync('highscore', this.highScore);
+      } else if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('highscore', String(this.highScore));
+      }
+    }
+
+    // 触发自动复活逻辑 (伪社交)
+    if (this.score >= 1000 && !this.hasReceivedStarThisGame && Math.random() < 1.0) {
+      const fakeName = CONSTANTS.SOCIAL.FAKE_PLAYER_NAMES[Math.floor(Math.random() * CONSTANTS.SOCIAL.FAKE_PLAYER_NAMES.length)];
+      this.startRespawnAnimation(fakeName);
+      return;
+    }
+
+    // 重置游戏结束阶段
+    this.gameOverPhase = 'star_send';
+    this.hasHandledStar = false;
+
+    // 设置送出按钮区域（仅在星星送出阶段）
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
+    this.sendButtonArea = this.stars > 0 ? { x: centerX - 100, y: centerY + 120, w: 200, h: 60 } : null;
+
+    // 如果没有星星，直接进入重开阶段
+    if (this.stars <= 0) {
+      this.gameOverPhase = 'restart';
+      this.hasHandledStar = true;
+    }
+  }
+*/
+
+// 步骤4：在 sendStar() 方法中添加阶段切换逻辑
+// 替换为以下代码：
+/*
+  sendStar() {
+    if (this.stars > 0) {
+      this.stars--;
+      this.starsSent++;
+      this.saveSocialData();
+      this.activeEffects.push({
+        text: '✨ 星星已送出！',
+        color: '#fbbf24',
+        life: 2.0,
+        age: 0,
+        y: screenHeight * 0.5
+      });
+      this.sendButtonArea = null;
+
+      // 切换到重开阶段
+      this.gameOverPhase = 'restart';
+      this.hasHandledStar = true;
+    }
+  }
+*/
+
+// 步骤5：在 draw() 方法中根据阶段显示不同界面
+// 替换原有的绘制逻辑：
+/*
+    // 绘制游戏结束界面
+    if (this.state === 'GAMEOVER' && !this.isRespawning) {
+      if (this.gameOverPhase === 'star_send') {
+        // 阶段1：星星送出界面
+        let detail = '得分: ' + this.score;
+        if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
+          detail += ' | 最大连击: ' + this.maxCombo + 'x';
+        }
+
+        // 绘制送出星星界面
+        this.drawStarSendUI(detail, this.gameOverUIAlpha);
+
+        // 绘制送出星星按钮
+        if (this.sendButtonArea) {
+          const btn = this.sendButtonArea;
+          ctx.save();
+          const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
+          ctx.fillStyle = 'rgba(251, 191, 36, ' + pulse + ')';
+          ctx.shadowColor = 'rgba(0,0,0,0.3)';
+          ctx.shadowBlur = 15;
+          ctx.shadowOffsetY = 5;
+          drawRoundedRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 30);
+          ctx.fill();
+
+          ctx.shadowBlur = 0;
+          ctx.save();
+          ctx.translate(btn.x + btn.w / 2 - 15, btn.y + btn.h / 2);
+          this.drawStar(0, 0, 12, '#fef08a');
+          ctx.restore();
+
+          ctx.restore();
+
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText('⭐ 送出星星', btn.x + btn.w / 2, btn.y + btn.h / 2);
+          ctx.restore();
+        }
+      } else if (this.gameOverPhase === 'restart') {
+        // 阶段2：重开界面
+        let detail = '得分: ' + this.score;
+        if (this.score >= CONSTANTS.ADVANCED_MECHANICS.LATEGAME_START_SCORE && this.maxCombo > 5) {
+          detail += ' | 最大连击: ' + this.maxCombo + 'x';
+        }
+        this.drawUIOverlay('游戏结束', '点击重试', detail, this.gameOverUIAlpha);
+      }
+    }
+
+    // 显示星星数量和帮助人数（在右上角）
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+    ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
+
+    if (this.starsSent > 0) {
+      ctx.font = '18px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.shadowBlur = 0;
+      ctx.fillText('帮助过 ' + this.starsSent + ' 人', screenWidth - 20, 45);
+    }
+    ctx.restore();
+*/
+
+// 步骤6：添加新的 drawStarSendUI 方法
+// 在 Main 类中添加以下方法：
+/*
+  // 绘制星星送出界面
+  drawStarSendUI(detail, alpha = 1) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(11, 16, 38, 0.85)';
+    ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
+
+    // 绘制卡片背景
+    const cardW = 320;
+    const cardH = 380;
+    const cardX = centerX - cardW / 2;
+    const cardY = centerY - cardH / 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
+    ctx.fill();
+    ctx.restore();
+
+    // 绘制星星图标
+    const starY = cardY + 100;
+    const starSize = 60 + Math.sin(Date.now() * 0.005) * 5;
+    ctx.save();
+    ctx.shadowColor = '#fbbf24';
+    ctx.shadowBlur = 20;
+    this.drawStar(centerX, starY, starSize, '#fbbf24');
+    ctx.restore();
+
+    // 绘制标题
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillStyle = '#1e293b';
+    ctx.fillText('游戏结束', centerX, cardY + 180);
+
+    // 绘制得分
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(detail, centerX, cardY + 220);
+
+    // 绘制提示文字
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText('送出星星帮助他人', centerX, cardY + 280);
+
+    ctx.restore();
+  }
+*/
