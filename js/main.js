@@ -631,10 +631,10 @@ class Main {
         const centerX = screenWidth / 2;
         const centerY = screenHeight / 2;
         const cardW = 320;
-        const cardH = 380;
+        const cardH = 460;
         const cardX = centerX - cardW / 2;
         const cardY = centerY - cardH / 2;
-        const skipBtn = { x: cardX + 100, y: cardY + 320, w: 120, h: 40 };
+        const skipBtn = { x: cardX + 100, y: cardY + 480, w: 120, h: 40 };
         
         if (isTouchStart && 
             x >= skipBtn.x && x <= skipBtn.x + skipBtn.w &&
@@ -885,24 +885,24 @@ class Main {
         }
       });
 
-      // 飞鸟碰撞检测（只能从上方踩踏消灭飞鸟）
+      // 飞鸟碰撞检测（任何方向碰撞都导致游戏结束）
       this.birds.forEach(bird => {
         if (!bird.active) return;
 
-        // 定义碰撞盒（使用比实际尺寸稍小的碰撞盒，更精确）
+        // 定义碰撞盒（更贴近视觉模型）
         const rabbitBox = {
-          left: this.rabbit.x - this.rabbit.width * 0.4,  // 缩小碰撞盒
-          right: this.rabbit.x + this.rabbit.width * 0.4,
-          top: this.rabbit.y - this.rabbit.height * 0.4,
-          bottom: this.rabbit.y + this.rabbit.height * 0.4
+          left: this.rabbit.x - this.rabbit.width * 0.35,  // 缩小到35%
+          right: this.rabbit.x + this.rabbit.width * 0.35,
+          top: this.rabbit.y - this.rabbit.height * 0.35,
+          bottom: this.rabbit.y + this.rabbit.height * 0.35
         };
 
-        // 飞鸟的碰撞盒（椭圆20×12，使用稍微宽松一点的判定）
+        // 飞鸟的碰撞盒（椭圆20×12，使用更精确的判定）
         const birdBox = {
-          left: bird.x - 16,  // 比绘制椭圆小一点
-          right: bird.x + 16,
-          top: bird.y - 8,   // 比绘制椭圆小一点
-          bottom: bird.y + 8
+          left: bird.x - 15,  // 飞鸟椭圆半径约20，留5px余量
+          right: bird.x + 15,
+          top: bird.y - 6,    // 飞鸟椭圆半径约12，留6px余量
+          bottom: bird.y + 6
         };
 
         // 检测碰撞盒重叠
@@ -911,23 +911,7 @@ class Main {
                               rabbitBox.top < birdBox.bottom &&
                               rabbitBox.bottom > birdBox.top;
 
-        if (!isOverlapping) return;  // 没有重叠，跳过
-
-        // 检测是否是踩踏：兔子正在下落，且兔子底部在飞鸟顶部上方附近
-        const isFallingDown = this.rabbit.vy > 0;
-        const rabbitBottomAboveBirdTop = rabbitBox.bottom < birdBox.top + 10;  // 兔子底部在飞鸟顶部10px以内
-        const rabbitWasAbove = this.rabbit.y - this.rabbit.vy * 3 < birdBox.top - 10;  // 上一帧兔子在飞鸟上方
-
-        const isStomping = isFallingDown && rabbitBottomAboveBirdTop && rabbitWasAbove;
-
-        if (isStomping) {
-          // 踩踏消灭飞鸟
-          bird.active = false;
-          this.rabbit.vy = CONSTANTS.JUMP_FORCE * 0.6;  // 给一个小反弹
-          this.score += 50;  // 踩踏奖励分
-          this.spawnParticles(bird.x, bird.y, '#374151');
-          this.spawnEffectPopup('+50!', '#374151');
-        } else if (this.respawnGraceTimer <= 0) {
+        if (isOverlapping && this.respawnGraceTimer <= 0) {
           // 撞到飞鸟，游戏结束
           this.gameOver();
         }
@@ -1221,25 +1205,30 @@ class Main {
 
     // 绘制卡片背景（半透明）
     const cardW = 320;
-    const cardH = 380;
+    const cardH = 460;
     const cardX = centerX - cardW / 2;
     const cardY = centerY - cardH / 2;
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.2)';
     ctx.shadowBlur = 20;
     ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
     drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
     ctx.fill();
     ctx.restore();
 
-    // 绘制星星图标
+    // 绘制星星图标（使用 Emoji）
     const starY = cardY + 100;
-    const starSize = 60 + Math.sin(Date.now() * 0.005) * 5;
+    const starScale = 1 + Math.sin(Date.now() * 0.005) * 0.08;
     ctx.save();
+    ctx.translate(centerX, starY);
+    ctx.scale(starScale, starScale);
     ctx.shadowColor = '#fbbf24';
     ctx.shadowBlur = 20;
-    this.drawStar(centerX, starY, starSize, '#fbbf24');
+    ctx.font = 'bold 100px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⭐', 0, 0);
     ctx.restore();
 
     // 绘制标题
@@ -1253,9 +1242,9 @@ class Main {
     ctx.fillText(detail, centerX, cardY + 220);
 
     // 绘制提示文字
-    ctx.font = 'bold 24px sans-serif';
+    ctx.font = 'bold 16px sans-serif';
     ctx.fillStyle = '#f59e0b';
-    ctx.fillText('送出星星帮助他人', centerX, cardY + 280);
+    ctx.fillText('你有一颗星星，要送给远方的人吗？', centerX, cardY + 280);
 
     // 绘制送出星星按钮
     if (this.sendButtonArea) {
@@ -1269,25 +1258,21 @@ class Main {
       drawRoundedRectPath(ctx, btn.x, btn.y, btn.w, btn.h, 30);
       ctx.fill();
 
+      // 绘制黄色星星
       ctx.shadowBlur = 0;
       ctx.save();
-      ctx.translate(btn.x + btn.w / 2 - 15, btn.y + btn.h / 2);
-      this.drawStar(0, 0, 12, '#fef08a');
-      ctx.restore();
-
-      ctx.restore();
-
-      ctx.save();
+      ctx.translate(btn.x + btn.w / 2, btn.y + btn.h / 2);
+      ctx.font = 'bold 40px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText('⭐ 送出星星', btn.x + btn.w / 2, btn.y + btn.h / 2);
+      ctx.fillText('⭐', 0, 0);
       ctx.restore();
+
+
     }
 
     // 绘制跳过按钮
-    const skipBtn = { x: cardX + 100, y: cardY + 320, w: 120, h: 40 };
+    const skipBtn = { x: cardX + 100, y: cardY + 480, w: 120, h: 40 };
     ctx.save();
     ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
     ctx.shadowColor = 'rgba(0,0,0,0.1)';
@@ -1336,11 +1321,17 @@ class Main {
       const starX = anim.starX + (anim.targetX - anim.starX) * t;
       const starY = anim.starY + (anim.targetY - anim.starY) * t;
 
-      const starSize = 40 + Math.sin(Date.now() * 0.01) * 5;
+      const starScale = 1 + Math.sin(Date.now() * 0.01) * 0.1;
+      ctx.save();
+      ctx.translate(starX, starY);
+      ctx.scale(starScale, starScale);
       ctx.shadowColor = '#fbbf24';
       ctx.shadowBlur = 30 + Math.sin(Date.now() * 0.008) * 10;
-      this.drawStar(starX, starY, starSize, '#fbbf24');
-      ctx.shadowBlur = 0;
+      ctx.font = 'bold 50px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⭐', 0, 0);
+      ctx.restore();
 
       for (let i = 0; i < 8; i++) {
         const trailProgress = (anim.progress * 8 + i) / 8 - 1;
@@ -1348,10 +1339,19 @@ class Main {
           const trailT = easeOutCubic(trailProgress);
           const trailX = anim.starX + (anim.targetX - anim.starX) * trailT;
           const trailY = anim.starY + (anim.targetY - anim.starY) * trailT;
-          const trailSize = 20 * (1 - trailProgress);
+          const trailScale = 0.5 * (1 - trailProgress);
           const trailAlpha = (1 - trailProgress) * 0.5;
           ctx.globalAlpha = trailAlpha;
-          this.drawStar(trailX, trailY, trailSize, '#fbbf24');
+          ctx.save();
+          ctx.translate(trailX, trailY);
+          ctx.scale(trailScale, trailScale);
+          ctx.shadowColor = '#fbbf24';
+          ctx.shadowBlur = 15;
+          ctx.font = 'bold 50px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⭐', 0, 0);
+          ctx.restore();
         }
       }
       ctx.globalAlpha = 1;
@@ -1360,10 +1360,17 @@ class Main {
       const starX = anim.targetX;
       const starY = this.rabbit.y - 30;
 
-      const starSize = 50 + Math.sin(Date.now() * 0.012) * 8;
+      const starScale = 1 + Math.sin(Date.now() * 0.012) * 0.15;
+      ctx.save();
+      ctx.translate(starX, starY);
+      ctx.scale(starScale, starScale);
       ctx.shadowColor = '#fbbf24';
       ctx.shadowBlur = 40 + Math.sin(Date.now() * 0.01) * 15;
-      this.drawStar(starX, starY, starSize, '#fbbf24');
+      ctx.font = 'bold 60px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⭐', 0, 0);
+      ctx.restore();
 
       const gradient = ctx.createRadialGradient(starX, starY, 0, starX, starY, 120);
       gradient.addColorStop(0, 'rgba(251, 191, 36, 0.3)');
@@ -1394,28 +1401,49 @@ class Main {
         const radius = 60 + Math.sin(Date.now() * 0.01 + i) * 10;
         const particleX = starX + Math.cos(angle) * radius;
         const particleY = starY + Math.sin(angle) * radius;
-        const particleSize = 8 + Math.sin(Date.now() * 0.02 + i * 2) * 3;
-        this.drawStar(particleX, particleY, particleSize, '#fef3c7');
+        const particleScale = 0.3 + Math.sin(Date.now() * 0.02 + i * 2) * 0.1;
+        ctx.save();
+        ctx.translate(particleX, particleY);
+        ctx.scale(particleScale, particleScale);
+        ctx.font = 'bold 50px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', 0, 0);
+        ctx.restore();
       }
 
     } else if (anim.phase === 'release') {
       const starX = anim.targetX;
       const starY = this.rabbit.y - 30;
-      const starSize = 50 * (1 - anim.progress);
+      const starScale = 1 - anim.progress;
       const alpha = 1 - anim.progress;
 
       ctx.globalAlpha = alpha;
+      ctx.save();
+      ctx.translate(starX, starY);
+      ctx.scale(starScale, starScale);
       ctx.shadowColor = '#fbbf24';
       ctx.shadowBlur = 50;
-      this.drawStar(starX, starY, starSize, '#fbbf24');
+      ctx.font = 'bold 60px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⭐', 0, 0);
+      ctx.restore();
 
       for (let i = 0; i < 12; i++) {
         const angle = (Math.PI * 2 * i / 12) + anim.progress;
         const distance = anim.progress * 100;
         const particleX = starX + Math.cos(angle) * distance;
         const particleY = starY + Math.sin(angle) * distance;
-        const particleSize = 10 * (1 - anim.progress);
-        this.drawStar(particleX, particleY, particleSize, '#fcd34d');
+        const particleScale = 0.3 * (1 - anim.progress);
+        ctx.save();
+        ctx.translate(particleX, particleY);
+        ctx.scale(particleScale, particleScale);
+        ctx.font = 'bold 50px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', 0, 0);
+        ctx.restore();
       }
       ctx.globalAlpha = 1;
     }
@@ -1572,20 +1600,24 @@ class Main {
       ctx.restore();
     });
 
-    // 显示星星数量和帮助人数（在右上角）
+    // 显示星星数量（在右上角）
     ctx.save();
     ctx.textAlign = 'right';
     ctx.font = 'bold 28px sans-serif';
     ctx.fillStyle = '#fbbf24';
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 8;
-    ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
 
+    if (this.stars > 0 || this.starsSent > 0) {
+      ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
+    }
+
+    // 显示送出的星星数量
     if (this.starsSent > 0) {
       ctx.font = '18px sans-serif';
       ctx.fillStyle = '#94a3b8';
       ctx.shadowBlur = 0;
-      ctx.fillText('帮助过 ' + this.starsSent + ' 人', screenWidth - 20, 45);
+      ctx.fillText('送出 ' + this.starsSent, screenWidth - 20, 45);
     }
     ctx.restore();
 
@@ -1752,7 +1784,7 @@ class Main {
       ctx.shadowColor = 'rgba(0,0,0,0.2)';
       ctx.shadowBlur = 20;
       ctx.shadowOffsetY = 10;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
       drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
       ctx.fill();
       ctx.restore();
@@ -1827,26 +1859,15 @@ class Main {
             currentY += 30;
           }
 
-          // 帮助人数
+          // 送出的星星数量
           if (this.starsSent > 0) {
             ctx.font = '18px sans-serif';
             ctx.fillStyle = '#94a3b8';
-            ctx.fillText('已帮助 ' + this.starsSent + ' 位玩家', centerX, currentY);
+            ctx.fillText('已送出 ' + this.starsSent, centerX, currentY);
             currentY += 30;
           }
 
-          // 获取提示
-          if (this.canGetStar) {
-            ctx.font = '16px sans-serif';
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('再接再厉，达成目标可获得星星', centerX, currentY);
-            currentY += 30;
-          } else if (this.stars > 0) {
-            ctx.font = '16px sans-serif';
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('星星可帮助其他玩家复活', centerX, currentY);
-            currentY += 30;
-          }
+
         }
 
         // 6. 底部提示
