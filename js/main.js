@@ -282,6 +282,16 @@ class Main {
         this.gameOverPhase = 'star_send';
         this.hasHandledStar = false;
 
+        // 界面过渡动画
+        this.transition = {
+          active: false,
+          fromState: null,
+          toState: null,
+          progress: 0,
+          duration: 500,
+          phase: 'none'  // 'fade_out', 'fade_in'
+        };
+
         this.score = 0;
         this.highScore = 0;
       
@@ -412,7 +422,7 @@ class Main {
   }
 
   // --- 游戏重置 ---
-  reset() {
+  reset(resetRabbit = true) {
     this.score = 0;
     // 从本地存储读取数据
     if (isWeChat && typeof wx !== 'undefined' && typeof wx.getStorageSync === 'function') {
@@ -430,21 +440,26 @@ class Main {
       this.starsSent = 0;
     }
 
-    // 初始化兔子位置
-    this.rabbit = {
-      x: screenWidth / 2,
-      y: screenHeight - 135,
-      vx: 0,
-      vy: 0,
-      width: 77, 
-      height: 77,
-      rotation: 0,
-      facing: 1
-    };
-
-    this.cameraY = 0;
-    this.groundY = screenHeight - 100;
-    this.hasStartedGame = false;
+    // 初始化兔子位置（仅在完全重置时）
+    if (resetRabbit) {
+      this.rabbit = {
+        x: screenWidth / 2,
+        y: screenHeight - 135,
+        vx: 0,
+        vy: 0,
+        width: 77, 
+        height: 77,
+        rotation: 0,
+        facing: 1
+      };
+      this.cameraY = 0;
+      this.groundY = screenHeight - 100;
+      this.hasStartedGame = false;
+    } else {
+      // 只重置相机和地面
+      this.cameraY = 0;
+      this.groundY = screenHeight - 100;
+    }
 
     this.difficulty = 0;
     this.bellSpacing = this.baseBellSpacing;
@@ -453,8 +468,19 @@ class Main {
     this.bells = [];
     this.particles = [];
     this.scorePopups = [];
-    this.backgroundStars = [];
-    this.snowflakes = [];
+    // 背景装饰不完全清空，避免闪烁
+    if (!this.backgroundStars || this.backgroundStars.length === 0) {
+      this.backgroundStars = [];
+      for (let i = 0; i < 60; i++) {
+        this.backgroundStars.push({ x: Math.random() * screenWidth, y: Math.random() * screenHeight, size: Math.random() * 2, alpha: Math.random() });
+      }
+    }
+    if (!this.snowflakes || this.snowflakes.length === 0) {
+      this.snowflakes = [];
+      for (let i = 0; i < 50; i++) {
+        this.snowflakes.push({ x: Math.random() * screenWidth, y: Math.random() * screenHeight, size: 2 + Math.random() * 3, speed: 0.2 + Math.random() * 0.8, swayOffset: Math.random() * Math.PI * 2 });
+      }
+    }
     this.trees = [];
     this.birds = [];
     
@@ -604,13 +630,24 @@ class Main {
     // 菜单 -> 开始游戏
     if (this.state === 'MENU') {
       if (!isTouchStart) return;
-      this.reset();
+
+      // 保存点击位置
+      const startX = x;
+
+      // 先重置游戏世界（但不重置兔子位置）
+      this.reset(false);  // 传入 false 表示不重置兔子位置
+
+      // 设置兔子位置为点击位置
+      this.rabbit.x = startX;
+      this.rabbit.y = screenHeight - 135;  // 重置到初始位置
+      this.rabbit.vx = 0;
+      this.rabbit.vy = CONSTANTS.JUMP_FORCE;
+      this.targetX = startX;
+      this.hasStartedGame = true;
+
+      // 切换到 PLAYING 状态
       this.state = 'PLAYING';
       this.audio.playBGM();
-      this.rabbit.vy = CONSTANTS.JUMP_FORCE;
-      this.hasStartedGame = true;
-      this.rabbit.x = x;
-      this.targetX = x;
       this.audio.playJump('NORMAL');
       return;
     }
@@ -635,13 +672,22 @@ class Main {
         const cardX = centerX - cardW / 2;
         const cardY = centerY - cardH / 2;
         const skipBtn = { x: cardX + 100, y: cardY + 480, w: 120, h: 40 };
-        
-        if (isTouchStart && 
+
+        if (isTouchStart &&
             x >= skipBtn.x && x <= skipBtn.x + skipBtn.w &&
             y >= skipBtn.y && y <= skipBtn.y + skipBtn.h) {
-          this.gameOverPhase = 'restart';
-          this.hasHandledStar = true;
-          this.sendButtonArea = null;
+          // 启动过渡动画：界面淡出
+          this.startTransition('GAMEOVER', 'GAMEOVER', {
+            starFly: false,
+            duration: 600
+          });
+
+          // 动画完成后切换到重开阶段
+          setTimeout(() => {
+            this.gameOverPhase = 'restart';
+            this.hasHandledStar = true;
+            this.sendButtonArea = null;
+          }, 600);
           return;
         }
         return; // star_send 阶段不允许其他操作
@@ -678,6 +724,9 @@ class Main {
   // --- 游戏逻辑更新 ---
   update() {
     this.updateSnowflakes();
+
+    // 更新界面过渡动画
+    this.updateTransition();
 
     // 游戏结束逻辑
     if (this.state === 'GAMEOVER') {
@@ -1089,9 +1138,109 @@ class Main {
       });
       this.sendButtonArea = null;
 
-      // 切换到重开阶段
-      this.gameOverPhase = 'restart';
-      this.hasHandledStar = true;
+      // 启动过渡动画：星星飞走，界面淡出
+      this.startTransition('GAMEOVER', 'GAMEOVER', {
+        starFly: true,
+        duration: 800
+      });
+
+      // 动画完成后切换到重开阶段
+      setTimeout(() => {
+        this.gameOverPhase = 'restart';
+        this.hasHandledStar = true;
+      }, 800);
+    }
+  }
+
+  startTransition(fromState, toState, options = {}) {
+    this.transition = {
+      active: true,
+      fromState: fromState,
+      toState: toState,
+      progress: 0,
+      duration: options.duration || 500,
+      starFly: options.starFly || false,
+      startTime: Date.now()
+    };
+  }
+
+  updateTransition() {
+    if (!this.transition.active) return;
+
+    const now = Date.now();
+    const elapsed = now - this.transition.startTime;
+    this.transition.progress = Math.min(1, elapsed / this.transition.duration);
+
+    if (this.transition.progress >= 1) {
+      this.transition.active = false;
+    }
+  }
+
+  drawTransition() {
+    if (!this.transition.active) return;
+
+    const { progress, starFly, fromState, toState } = this.transition;
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
+    const cardH = 460;  // 星星送出界面的卡片高度
+
+    // 星星飞出动画（仅 star_send 界面）
+    if (starFly && this.gameOverPhase === 'star_send') {
+      const starY = centerY - cardH / 2 + 100;
+
+      // 第一阶段：变大（0-40%）
+      if (progress < 0.4) {
+        const scale = 1 + (progress / 0.4) * 0.5;  // 1x → 1.5x
+        const alpha = 1 - progress * 0.2;
+
+        ctx.save();
+        ctx.translate(centerX, starY);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 40 + Math.sin(Date.now() * 0.01) * 20;
+        ctx.font = 'bold 120px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', 0, 0);
+        ctx.restore();
+      }
+      // 第二阶段：飞走（40-100%）
+      else {
+        const flyProgress = (progress - 0.4) / 0.6;  // 0 → 1
+        const scale = 1.5 - flyProgress * 0.5;  // 1.5x → 1x
+        const targetY = -200;
+        const startY = centerY - cardH / 2 + 100;
+        const currentY = startY + (targetY - startY) * flyProgress;
+        const alpha = 0.8 - flyProgress * 0.8;  // 0.8 → 0
+
+        ctx.save();
+        ctx.translate(centerX, currentY);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 40 * alpha;
+        ctx.font = 'bold 100px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', 0, 0);
+        ctx.restore();
+      }
+    }
+
+    // 界面淡出效果
+    if (progress < 0.5) {
+      // 淡出前半段：保持显示
+    } else {
+      // 淡出后半段：逐渐消失
+      const fadeProgress = (progress - 0.5) / 0.5;
+      const fadeAlpha = 1 - fadeProgress;
+
+      ctx.save();
+      ctx.globalAlpha = fadeAlpha;
+      ctx.fillStyle = 'rgba(11, 16, 38, ' + (0.85 * fadeAlpha) + ')';
+      ctx.fillRect(0, 0, screenWidth, screenHeight);
+      ctx.restore();
     }
   }
 
@@ -1643,6 +1792,9 @@ class Main {
         }
       }
     }
+
+    // 绘制界面过渡动画
+    this.drawTransition();
 
     ctx.restore();
   }
