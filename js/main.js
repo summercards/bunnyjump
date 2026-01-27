@@ -676,10 +676,10 @@ class Main {
         if (isTouchStart &&
             x >= skipBtn.x && x <= skipBtn.x + skipBtn.w &&
             y >= skipBtn.y && y <= skipBtn.y + skipBtn.h) {
-          // 启动过渡动画：界面淡出
+          // 启动过渡动画：界面淡出（延长到1200ms，保持节奏一致）
           this.startTransition('GAMEOVER', 'GAMEOVER', {
             starFly: false,
-            duration: 600
+            duration: 1200
           });
 
           // 动画完成后切换到重开阶段
@@ -1138,17 +1138,17 @@ class Main {
       });
       this.sendButtonArea = null;
 
-      // 启动过渡动画：星星飞走，界面淡出
+      // 启动过渡动画：星星旋转飞走，界面淡出（延长到2000ms）
       this.startTransition('GAMEOVER', 'GAMEOVER', {
         starFly: true,
-        duration: 800
+        duration: 2000
       });
 
       // 动画完成后切换到重开阶段
       setTimeout(() => {
         this.gameOverPhase = 'restart';
         this.hasHandledStar = true;
-      }, 800);
+      }, 2000);
     }
   }
 
@@ -1188,13 +1188,20 @@ class Main {
     if (starFly && this.gameOverPhase === 'star_send') {
       const starY = centerY - cardH / 2 + 100;
 
-      // 第一阶段：变大（0-40%）
-      if (progress < 0.4) {
-        const scale = 1 + (progress / 0.4) * 0.5;  // 1x → 1.5x
-        const alpha = 1 - progress * 0.2;
+      // 缓动函数
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+      const easeInCubic = (t) => t * t * t;
+
+      // 第一阶段：变大 + 开始旋转（0-30%）
+      if (progress < 0.3) {
+        const phaseProgress = progress / 0.3;
+        const scale = 1 + phaseProgress * 0.5;  // 1x → 1.5x
+        const rotation = phaseProgress * Math.PI * 0.5;  // 0 → 90度（1/4圈）
+        const alpha = 1 - progress * 0.15;  // 1 → 0.955
 
         ctx.save();
         ctx.translate(centerX, starY);
+        ctx.rotate(rotation);
         ctx.scale(scale, scale);
         ctx.globalAlpha = alpha;
         ctx.shadowColor = '#fbbf24';
@@ -1205,17 +1212,39 @@ class Main {
         ctx.fillText('⭐', 0, 0);
         ctx.restore();
       }
-      // 第二阶段：飞走（40-100%）
+      // 第二阶段：旋转两圈（30-80%）
+      else if (progress < 0.8) {
+        const phaseProgress = easeOutCubic((progress - 0.3) / 0.5);  // 使用缓动
+        const scale = 1.5;  // 保持1.5x
+        const rotation = Math.PI * 0.5 + phaseProgress * Math.PI * 4;  // 90度 → 810度（整2圈）
+        const alpha = 0.955 - (phaseProgress * 0.1);  // 0.955 → 0.855
+
+        ctx.save();
+        ctx.translate(centerX, starY);
+        ctx.rotate(rotation);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 40 + Math.sin(Date.now() * 0.01) * 20;
+        ctx.font = 'bold 120px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', 0, 0);
+        ctx.restore();
+      }
+      // 第三阶段：变小 + 向上飞走（80-100%）
       else {
-        const flyProgress = (progress - 0.4) / 0.6;  // 0 → 1
-        const scale = 1.5 - flyProgress * 0.5;  // 1.5x → 1x
-        const targetY = -200;
+        const phaseProgress = easeInCubic((progress - 0.8) / 0.2);  // 加速飞走
+        const scale = 1.5 - phaseProgress * 0.5;  // 1.5x → 1x
+        const rotation = Math.PI * 0.5 + Math.PI * 4;  // 保持最后的旋转角度（810度）
+        const targetY = -300;
         const startY = centerY - cardH / 2 + 100;
-        const currentY = startY + (targetY - startY) * flyProgress;
-        const alpha = 0.8 - flyProgress * 0.8;  // 0.8 → 0
+        const currentY = startY + (targetY - startY) * phaseProgress;
+        const alpha = 0.855 - phaseProgress * 0.855;  // 0.855 → 0
 
         ctx.save();
         ctx.translate(centerX, currentY);
+        ctx.rotate(rotation);
         ctx.scale(scale, scale);
         ctx.globalAlpha = alpha;
         ctx.shadowColor = '#fbbf24';
@@ -1228,12 +1257,12 @@ class Main {
       }
     }
 
-    // 界面淡出效果
-    if (progress < 0.5) {
-      // 淡出前半段：保持显示
+    // 界面淡出效果（整个动画期间）
+    if (progress < 0.7) {
+      // 淡出前半段：保持显示（前70%时间）
     } else {
-      // 淡出后半段：逐渐消失
-      const fadeProgress = (progress - 0.5) / 0.5;
+      // 淡出后半段：逐渐消失（后30%时间）
+      const fadeProgress = (progress - 0.7) / 0.3;
       const fadeAlpha = 1 - fadeProgress;
 
       ctx.save();
