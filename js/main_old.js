@@ -317,7 +317,7 @@ class Main {
         this.lastComboScore = 0;
       
         this.stars = 0;
-        this.peopleHelped = 0;  // 统计帮助过的人数
+        this.starsSent = 0;
         this.receiveStarAvailable = false;
         this.respawnGraceTimer = 0;
         this.respawnAnimation = null;
@@ -326,8 +326,6 @@ class Main {
         this.canGetStar = true;
         this.sendButtonArea = null;
         this.respawnButtonArea = null;
-        this.showHelpPopup = false;  // 是否显示游戏开始时的帮助人弹窗
-        this.helpPopupAlpha = 0;  // 弹窗透明度动画
       
         // ==============================
         // ✅✅✅ 下面是你缺失的关键代码
@@ -342,12 +340,6 @@ class Main {
         // 3) 绑定 this，防止 requestAnimationFrame 后 this 丢失
         this.loop = this.loop.bind(this);
         this.touchHandler = this.touchHandler.bind(this);
-
-        // 3.5) 检查是否需要在启动时显示帮助弹窗
-        if (this.peopleHelped > 0) {
-          this.showHelpPopup = true;
-          this.helpPopupAlpha = 0;
-        }
       
         // 4) 绑定触摸事件（否则点击没有任何效果）
         if (isWeChat && typeof wx !== 'undefined') {
@@ -436,16 +428,16 @@ class Main {
     if (isWeChat && typeof wx !== 'undefined' && typeof wx.getStorageSync === 'function') {
       this.highScore = Number(wx.getStorageSync('highscore') || 0);
       this.stars = Number(wx.getStorageSync('stars') || 0);
-      this.peopleHelped = Number(wx.getStorageSync('peopleHelped') || 0);
+      this.starsSent = Number(wx.getStorageSync('starsSent') || 0);
     } else if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem('highscore');
       this.highScore = stored ? Number(stored) : 0;
       this.stars = Number(localStorage.getItem('stars') || 0);
-      this.peopleHelped = Number(localStorage.getItem('peopleHelped') || 0);
+      this.starsSent = Number(localStorage.getItem('starsSent') || 0);
     } else {
       this.highScore = 0;
       this.stars = 0;
-      this.peopleHelped = 0;
+      this.starsSent = 0;
     }
 
     // 初始化兔子位置（仅在完全重置时）
@@ -635,37 +627,8 @@ class Main {
     const y = e.touches[0].clientY;
     const isTouchStart = e.type === 'touchstart';
 
-    // 处理帮助人弹窗的点击关闭
-    if (this.showHelpPopup && isTouchStart) {
-      const centerX = screenWidth / 2;
-      const centerY = screenHeight / 2;
-      const cardW = 280;
-      const cardH = 200;
-      const cardX = centerX - cardW / 2;
-      const cardY = centerY - cardH / 2;
-
-      // 检查是否点击了确认按钮区域
-      const confirmBtn = { x: cardX + 40, y: cardY + 155, w: 200, h: 35 };
-      if (x >= confirmBtn.x && x <= confirmBtn.x + confirmBtn.w &&
-          y >= confirmBtn.y && y <= confirmBtn.y + confirmBtn.h) {
-        this.showHelpPopup = false;
-        return;
-      }
-
-      // 点击其他位置不关闭弹窗
-      return;
-    }
-
     // 菜单 -> 开始游戏
     if (this.state === 'MENU') {
-      // 如果显示帮助弹窗，不处理开始游戏
-      if (this.showHelpPopup) {
-        if (isTouchStart) {
-          this.showHelpPopup = false;
-        }
-        return;
-      }
-
       if (!isTouchStart) return;
 
       // 保存点击位置
@@ -764,14 +727,6 @@ class Main {
 
     // 更新界面过渡动画
     this.updateTransition();
-
-    // 更新帮助人弹窗动画
-    if (this.showHelpPopup) {
-      if (this.helpPopupAlpha < 1) {
-        this.helpPopupAlpha += 0.05;
-        if (this.helpPopupAlpha > 1) this.helpPopupAlpha = 1;
-      }
-    }
 
     // 游戏结束逻辑
     if (this.state === 'GAMEOVER') {
@@ -1162,17 +1117,17 @@ class Main {
   saveSocialData() {
     if (isWeChat && typeof wx !== 'undefined' && typeof wx.setStorageSync === 'function') {
       wx.setStorageSync('stars', this.stars);
-      wx.setStorageSync('peopleHelped', this.peopleHelped);
+      wx.setStorageSync('starsSent', this.starsSent);
     } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem('stars', String(this.stars));
-      localStorage.setItem('peopleHelped', String(this.peopleHelped));
+      localStorage.setItem('starsSent', String(this.starsSent));
     }
   }
 
   sendStar() {
     if (this.stars > 0) {
       this.stars--;
-      this.peopleHelped++;
+      this.starsSent++;
       this.saveSocialData();
       this.activeEffects.push({
         text: '✨ 星星已送出！',
@@ -1515,77 +1470,6 @@ class Main {
     ctx.restore();
   }
 
-  // 绘制帮助人弹窗
-  drawHelpPopup() {
-    if (!this.showHelpPopup) return;
-    
-    ctx.save();
-    ctx.globalAlpha = this.helpPopupAlpha;
-    ctx.fillStyle = 'rgba(11, 16, 38, 0.85)';
-    ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-    const centerX = screenWidth / 2;
-    const centerY = screenHeight / 2;
-    const cardW = 280;
-    const cardH = 200;
-    const cardX = centerX - cardW / 2;
-    const cardY = centerY - cardH / 2;
-
-    // 绘制卡片背景
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 20);
-    ctx.fill();
-    ctx.restore();
-
-    // 绘制星星图标
-    const starY = cardY + 60;
-    const starScale = 1 + Math.sin(Date.now() * 0.005) * 0.08;
-    ctx.save();
-    ctx.translate(centerX, starY);
-    ctx.scale(starScale, starScale);
-    ctx.shadowColor = '#fbbf24';
-    ctx.shadowBlur = 20;
-    ctx.font = 'bold 60px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('⭐', 0, 0);
-    ctx.restore();
-
-    // 绘制提示文字
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillText('您的星星在远方', centerX, cardY + 110);
-    ctx.fillText('帮助了一个人', centerX, cardY + 135);
-
-    // 绘制确认按钮
-    const confirmBtn = { x: cardX + 40, y: cardY + 155, w: 200, h: 35 };
-    ctx.save();
-    const pulse = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
-    ctx.fillStyle = 'rgba(251, 191, 36, ' + pulse + ')';
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
-    drawRoundedRectPath(ctx, confirmBtn.x, confirmBtn.y, confirmBtn.w, confirmBtn.h, 17);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = '#fff';
-    ctx.fillText('确认', centerX, cardY + 172);
-    ctx.restore();
-
-    ctx.restore();
-  }
-
   drawStar(x, y, size, color) {
     ctx.save();
     ctx.translate(x, y);
@@ -1894,31 +1778,30 @@ class Main {
       ctx.restore();
     });
 
-    // 显示星星图标（不显示数量，没有星星时显示暗色）
+    // 显示星星数量（在右上角）
     ctx.save();
     ctx.textAlign = 'right';
-    
-    if (this.stars > 0) {
-      // 有星星时显示亮色星星
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillStyle = '#fbbf24';
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 8;
-      ctx.fillText('⭐', screenWidth - 20, 20);
-    } else {
-      // 没有星星时显示暗色星星
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
-      ctx.fillText('⭐', screenWidth - 20, 20);
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+
+    if (this.stars > 0 || this.starsSent > 0) {
+      ctx.fillText('⭐ ' + this.stars, screenWidth - 20, 20);
     }
 
+    // 显示送出的星星数量
+    if (this.starsSent > 0) {
+      ctx.font = '18px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.shadowBlur = 0;
+      ctx.fillText('送出 ' + this.starsSent, screenWidth - 20, 45);
+    }
     ctx.restore();
 
     if (!this.isRespawning) {
       if (this.state === 'MENU') {
-        // 如果显示帮助弹窗，主界面变浅
-        const menuAlpha = this.showHelpPopup ? 0.3 : 1;
-        this.drawUIOverlay('圣诞跳一跳', '点击开始游戏', '最高分: ' + this.highScore, menuAlpha);
+        this.drawUIOverlay('圣诞跳一跳', '点击开始游戏', '最高分: ' + this.highScore, 1);
       } else if (this.state === 'GAMEOVER') {
         // 根据游戏结束阶段显示不同界面
         if (this.gameOverPhase === 'star_send') {
@@ -1941,9 +1824,6 @@ class Main {
 
     // 绘制界面过渡动画
     this.drawTransition();
-
-    // 绘制帮助人弹窗
-    this.drawHelpPopup();
 
     ctx.restore();
   }
@@ -2048,7 +1928,7 @@ class Main {
 
     // 游戏结束状态需要更大的卡片来容纳所有信息
     const isGameOver = this.state === 'GAMEOVER' && !this.isRespawning;
-    const hasExtraInfo = isGameOver && (this.peopleHelped > 0);
+    const hasExtraInfo = isGameOver && (this.stars > 0 || this.starsSent > 0 || this.receiveStarAvailable || this.canGetStar);
     const cardW = 320;
     const cardH = hasExtraInfo ? 520 : 340;
     const cardX = centerX - cardW / 2;
@@ -2148,7 +2028,7 @@ class Main {
           ctx.fillText('✨ 复活', centerX, currentY + 13);
           ctx.restore();
           currentY += 60;
-        } else if (this.stars > 0 || this.canGetStar || this.peopleHelped > 0) {
+        } else if (this.stars > 0 || this.canGetStar || this.starsSent > 0) {
           // 星星数量
           if (this.stars > 0 || this.canGetStar) {
             ctx.font = '24px sans-serif';
@@ -2160,11 +2040,11 @@ class Main {
             currentY += 30;
           }
 
-          // 帮助过的人数
-          if (this.peopleHelped > 0) {
+          // 送出的星星数量
+          if (this.starsSent > 0) {
             ctx.font = '18px sans-serif';
             ctx.fillStyle = '#94a3b8';
-            ctx.fillText('已帮助过 ' + this.peopleHelped + ' 人', centerX, currentY);
+            ctx.fillText('已送出 ' + this.starsSent, centerX, currentY);
             currentY += 30;
           }
 
