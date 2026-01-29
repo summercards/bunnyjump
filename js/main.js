@@ -88,7 +88,7 @@ const CONSTANTS = {
 
   // 社交玩法配置
   SOCIAL: {
-    FIRST_STAR_SCORE: 5000,       // 首次获得星星的分数门槛
+    FIRST_STAR_SCORE: 2000,       // 首次获得星星的分数门槛
     MAX_STARS: 1,                 // 最大持有星星数
     STAR_SEND_BONUS: 100,         // 送星奖励分
     // 假玩家名字库，用于显示"XXX送来星星"
@@ -328,6 +328,7 @@ class Main {
         this.respawnButtonArea = null;
         this.showHelpPopup = false;  // 是否显示游戏开始时的帮助人弹窗
         this.helpPopupAlpha = 0;  // 弹窗透明度动画
+        this.hasHelpPopupToShow = false;  // 是否有待显示的帮助人弹窗（送出星星后）
       
         // ==============================
         // ✅✅✅ 下面是你缺失的关键代码
@@ -344,7 +345,7 @@ class Main {
         this.touchHandler = this.touchHandler.bind(this);
 
         // 3.5) 检查是否需要在启动时显示帮助弹窗
-        if (this.peopleHelped > 0) {
+        if (this.hasHelpPopupToShow) {
           this.showHelpPopup = true;
           this.helpPopupAlpha = 0;
         }
@@ -437,15 +438,18 @@ class Main {
       this.highScore = Number(wx.getStorageSync('highscore') || 0);
       this.stars = Number(wx.getStorageSync('stars') || 0);
       this.peopleHelped = Number(wx.getStorageSync('peopleHelped') || 0);
+      this.hasHelpPopupToShow = wx.getStorageSync('hasHelpPopupToShow') === 'true';
     } else if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem('highscore');
       this.highScore = stored ? Number(stored) : 0;
       this.stars = Number(localStorage.getItem('stars') || 0);
       this.peopleHelped = Number(localStorage.getItem('peopleHelped') || 0);
+      this.hasHelpPopupToShow = localStorage.getItem('hasHelpPopupToShow') === 'true';
     } else {
       this.highScore = 0;
       this.stars = 0;
       this.peopleHelped = 0;
+      this.hasHelpPopupToShow = false;
     }
 
     // 初始化兔子位置（仅在完全重置时）
@@ -649,6 +653,13 @@ class Main {
       if (x >= confirmBtn.x && x <= confirmBtn.x + confirmBtn.w &&
           y >= confirmBtn.y && y <= confirmBtn.y + confirmBtn.h) {
         this.showHelpPopup = false;
+        this.hasHelpPopupToShow = false;
+        // 清除本地存储的弹窗显示标记
+        if (isWeChat && typeof wx !== 'undefined' && typeof wx.setStorageSync === 'function') {
+          wx.setStorageSync('hasHelpPopupToShow', 'false');
+        } else if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('hasHelpPopupToShow', 'false');
+        }
         return;
       }
 
@@ -1053,10 +1064,12 @@ class Main {
   checkStarEarn() {
     if (!this.canGetStar) return;
 
-    // 获取条件：首次 >5000分 或 打破记录
+    // 获取条件：
+    // 1. 首次 >2000分
+    // 2. 破纪录且分数 > 2000
     const isNewRecord = this.score > this.highScore;
     const isFirstMilestone = this.stars === 0 && this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE;
-    const canEarn = isNewRecord || isFirstMilestone;
+    const canEarn = (isNewRecord && this.score >= CONSTANTS.SOCIAL.FIRST_STAR_SCORE) || isFirstMilestone;
 
     if (canEarn) {
       if (this.stars < CONSTANTS.SOCIAL.MAX_STARS) {
@@ -1066,7 +1079,7 @@ class Main {
 
         // 显示获得星星的提示
         if (isNewRecord && isFirstMilestone) {
-          // 同时打破纪录和首次达到5000分
+          // 同时打破纪录和首次达到2000分
           this.activeEffects.push({
             text: '🏆 新纪录：' + this.score + '！',
             color: '#fbbf24',
@@ -1082,7 +1095,7 @@ class Main {
             y: screenHeight * 0.45
           });
         } else if (isFirstMilestone) {
-          // 首次达到5000分
+          // 首次达到2000分
           this.activeEffects.push({
             text: '🎯 达成目标：' + this.score + '分！',
             color: '#fbbf24',
@@ -1098,7 +1111,7 @@ class Main {
             y: screenHeight * 0.45
           });
         } else if (isNewRecord) {
-          // 破纪录
+          // 破纪录且分数>2000
           this.activeEffects.push({
             text: '🏆 新纪录：' + this.score + '！',
             color: '#fbbf24',
@@ -1172,7 +1185,6 @@ class Main {
   sendStar() {
     if (this.stars > 0) {
       this.stars--;
-      this.peopleHelped++;
       this.saveSocialData();
       this.activeEffects.push({
         text: '✨ 星星已送出！',
@@ -1194,6 +1206,17 @@ class Main {
         this.gameOverPhase = 'restart';
         this.hasHandledStar = true;
       }, 2000);
+
+      // 有概率（50%）显示帮助人弹窗
+      if (Math.random() < 0.5) {
+        this.hasHelpPopupToShow = true;
+        // 保存到本地存储
+        if (isWeChat && typeof wx !== 'undefined' && typeof wx.setStorageSync === 'function') {
+          wx.setStorageSync('hasHelpPopupToShow', 'true');
+        } else if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('hasHelpPopupToShow', 'true');
+        }
+      }
     }
   }
 
@@ -1382,6 +1405,10 @@ class Main {
         this.audio.playJump('NORMAL');
         this.receiveStarAvailable = false;
         this.respawnButtonArea = null;
+
+        // 收到星星（复活）时，增加帮助人数统计
+        this.peopleHelped++;
+        this.saveSocialData();
       }
     }
   }
@@ -2164,7 +2191,7 @@ class Main {
           if (this.peopleHelped > 0) {
             ctx.font = '18px sans-serif';
             ctx.fillStyle = '#94a3b8';
-            ctx.fillText('已帮助过 ' + this.peopleHelped + ' 人', centerX, currentY);
+            ctx.fillText('您的星星帮助过 ' + this.peopleHelped + ' 人', centerX, currentY);
             currentY += 30;
           }
 
